@@ -1,0 +1,154 @@
+"use client"
+
+import { useState } from "react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { z } from "zod"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { Button } from "@/components/ui/button"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { Input } from "@/components/ui/input"
+import { useToast } from "@/hooks/use-toast"
+import { useTranslation } from "@/components/language-provider"
+import { LanguageSwitcher } from "@/components/language-switcher"
+
+const loginSchema = z.object({
+  email: z.string().email({
+    message: "Пожалуйста, введите корректный email",
+  }),
+  password: z.string().min(1, {
+    message: "Пожалуйста, введите пароль",
+  }),
+})
+
+type LoginFormValues = z.infer<typeof loginSchema>
+
+export default function LoginPage() {
+  const { t } = useTranslation()
+  const router = useRouter()
+  const { toast } = useToast()
+  const [isLoading, setIsLoading] = useState(false)
+
+  const form = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: "",
+      password: "",
+    },
+  })
+
+  async function onSubmit(data: LoginFormValues) {
+    setIsLoading(true)
+
+    try {
+      // Имитация API запроса
+      await new Promise((resolve) => setTimeout(resolve, 1500))
+
+      // Успешный вход
+      toast({
+        title: "Вход выполнен",
+        description: "Вы успешно вошли в систему",
+      })
+
+      router.push("/dashboard")
+    } catch (error) {
+      toast({
+        title: "Ошибка входа",
+        description: "Неверный email или пароль. Пожалуйста, попробуйте снова.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <div className="flex min-h-screen flex-col">
+      <div className="flex items-center justify-between p-4 border-b">
+        <Link href="/" className="text-xl font-bold">
+          DataAnalytics
+        </Link>
+        <LanguageSwitcher />
+      </div>
+      <div className="flex flex-1 items-center justify-center p-4">
+        <div className="w-full max-w-md space-y-6 p-6 bg-white rounded-lg shadow-md">
+          <div className="space-y-2 text-center">
+            <h1 className="text-2xl font-bold">{t("login")}</h1>
+            <p className="text-gray-500">Войдите в свой аккаунт для доступа к платформе</p>
+          </div>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("email")}</FormLabel>
+                    <FormControl>
+                      <Input placeholder="example@example.com" type="email" autoComplete="email" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("password")}</FormLabel>
+                    <FormControl>
+                      <Input placeholder="••••••••" type="password" autoComplete="current-password" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="flex items-center justify-end">
+                <Link href="/auth/forgot-password" className="text-sm font-medium text-primary hover:underline">
+                  {t("forgotPassword")}
+                </Link>
+              </div>
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? (
+                  <div className="flex items-center">
+                    <svg
+                      className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    Вход...
+                  </div>
+                ) : (
+                  t("login")
+                )}
+              </Button>
+            </form>
+          </Form>
+          <div className="text-center text-sm">
+            Нет аккаунта?{" "}
+            <Link href="/auth/register" className="font-medium text-primary hover:underline">
+              {t("register")}
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
