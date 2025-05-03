@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0e\x61nalysis.proto\x12\x08\x61nalysis\":\n\x0f\x41nalysisRequest\x12\x14\n\x0c\x66ile_content\x18\x01 \x01(\x0c\x12\x11\n\tfile_name\x18\x02 \x01(\t\"\xe7\x03\n\x10\x41nalysisResponse\x12\x35\n\x0c\x64\x65scriptives\x18\x01 \x03(\x0b\x32\x1f.analysis.DescriptiveStatistics\x12\x36\n\x0fnormality_tests\x18\x02 \x03(\x0b\x32\x1d.analysis.NormalityTestResult\x12:\n\x14\x63onfidence_intervals\x18\x03 \x03(\x0b\x32\x1c.analysis.ConfidenceInterval\x12\x38\n\x10hypothesis_tests\x18\x04 \x03(\x0b\x32\x1e.analysis.HypothesisTestResult\x12=\n\x0f\x63hi_square_test\x18\x05 \x01(\x0b\x32$.analysis.PearsonChiSquareTestResult\x12\x30\n\x0b\x63orrelation\x18\x06 \x01(\x0b\x32\x1b.analysis.CorrelationResult\x12.\n\nregression\x18\x07 \x01(\x0b\x32\x1a.analysis.RegressionResult\x12\x35\n\x11\x62inomial_estimate\x18\x08 \x01(\x0b\x32\x1a.analysis.BinomialEstimate\x12\x16\n\x0eprocessing_log\x18\t \x03(\t\"\xf5\x01\n\x15\x44\x65scriptiveStatistics\x12\x15\n\rvariable_name\x18\x01 \x01(\t\x12\r\n\x05\x63ount\x18\x02 \x01(\x03\x12\x0c\n\x04mean\x18\x03 \x01(\x01\x12\x0e\n\x06median\x18\x04 \x01(\x01\x12\x0c\n\x04mode\x18\x05 \x03(\x01\x12\x10\n\x08variance\x18\x06 \x01(\x01\x12\x0f\n\x07std_dev\x18\x07 \x01(\x01\x12\x1d\n\x15variation_coefficient\x18\x08 \x01(\x01\x12\x10\n\x08skewness\x18\t \x01(\x01\x12\x10\n\x08kurtosis\x18\n \x01(\x01\x12\x11\n\tmin_value\x18\x0b \x01(\x01\x12\x11\n\tmax_value\x18\x0c \x01(\x01\"w\n\x13NormalityTestResult\x12\x15\n\rvariable_name\x18\x01 \x01(\t\x12\x11\n\ttest_name\x18\x02 \x01(\t\x12\x11\n\tstatistic\x18\x03 \x01(\x01\x12\x0f\n\x07p_value\x18\x04 \x01(\x01\x12\x12\n\nconclusion\x18\x05 \x01(\t\"\x87\x01\n\x12\x43onfidenceInterval\x12\x15\n\rvariable_name\x18\x01 \x01(\t\x12\x16\n\x0eparameter_name\x18\x02 \x01(\t\x12\x13\n\x0blower_bound\x18\x03 \x01(\x01\x12\x13\n\x0bupper_bound\x18\x04 \x01(\x01\x12\x18\n\x10\x63onfidence_level\x18\x05 \x01(\x01\"v\n\x14HypothesisTestResult\x12\x11\n\ttest_name\x18\x01 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x02 \x01(\t\x12\x11\n\tstatistic\x18\x03 \x01(\x01\x12\x0f\n\x07p_value\x18\x04 \x01(\x01\x12\x12\n\nconclusion\x18\x05 \x01(\t\"\x85\x01\n\x1aPearsonChiSquareTestResult\x12\x13\n\x0b\x64\x65scription\x18\x01 \x01(\t\x12\x11\n\tstatistic\x18\x02 \x01(\x01\x12\x1a\n\x12\x64\x65grees_of_freedom\x18\x03 \x01(\x05\x12\x0f\n\x07p_value\x18\x04 \x01(\x01\x12\x12\n\nconclusion\x18\x05 \x01(\t\"\xdc\x02\n\x11\x43orrelationResult\x12?\n\x07pearson\x18\x01 \x03(\x0b\x32..analysis.CorrelationResult.PearsonCorrelation\x12\x41\n\x08spearman\x18\x02 \x03(\x0b\x32/.analysis.CorrelationResult.SpearmanCorrelation\x1a`\n\x12PearsonCorrelation\x12\x11\n\tvariable1\x18\x01 \x01(\t\x12\x11\n\tvariable2\x18\x02 \x01(\t\x12\x13\n\x0b\x63oefficient\x18\x03 \x01(\x01\x12\x0f\n\x07p_value\x18\x04 \x01(\x01\x1a\x61\n\x13SpearmanCorrelation\x12\x11\n\tvariable1\x18\x01 \x01(\t\x12\x11\n\tvariable2\x18\x02 \x01(\t\x12\x13\n\x0b\x63oefficient\x18\x03 \x01(\x01\x12\x0f\n\x07p_value\x18\x04 \x01(\x01\"\xe7\x02\n\x10RegressionResult\x12\x12\n\nmodel_type\x18\x01 \x01(\t\x12\x1a\n\x12\x64\x65pendent_variable\x18\x02 \x01(\t\x12\x1d\n\x15independent_variables\x18\x03 \x03(\t\x12\x11\n\tr_squared\x18\x04 \x01(\x01\x12\x1a\n\x12\x61\x64justed_r_squared\x18\x05 \x01(\x01\x12\x13\n\x0b\x66_statistic\x18\x06 \x01(\x01\x12\x11\n\tf_p_value\x18\x07 \x01(\x01\x12<\n\x0c\x63oefficients\x18\x08 \x03(\x0b\x32&.analysis.RegressionResult.Coefficient\x1ao\n\x0b\x43oefficient\x12\x15\n\rvariable_name\x18\x01 \x01(\t\x12\x10\n\x08\x65stimate\x18\x02 \x01(\x01\x12\x11\n\tstd_error\x18\x03 \x01(\x01\x12\x13\n\x0bt_statistic\x18\x04 \x01(\x01\x12\x0f\n\x07p_value\x18\x05 \x01(\x01\"p\n\x10\x42inomialEstimate\x12\x15\n\rvariable_name\x18\x01 \x01(\t\x12\x14\n\x0ctotal_trials\x18\x02 \x01(\x03\x12\x11\n\tsuccesses\x18\x03 \x01(\x03\x12\x1c\n\x14probability_estimate\x18\x04 \x01(\x01\x32W\n\x0f\x41nalysisService\x12\x44\n\x0b\x41nalyzeData\x12\x19.analysis.AnalysisRequest\x1a\x1a.analysis.AnalysisResponseB\x17Z\x15./go-server/generatedb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0e\x61nalysis.proto\x12\x08\x61nalysis\":\n\x0f\x41nalysisRequest\x12\x14\n\x0c\x66ile_content\x18\x01 \x01(\x0c\x12\x11\n\tfile_name\x18\x02 \x01(\t\"\x81\x04\n\x10\x41nalysisResponse\x12\x35\n\x0c\x64\x65scriptives\x18\x01 \x03(\x0b\x32\x1f.analysis.DescriptiveStatistics\x12\x36\n\x0fnormality_tests\x18\x02 \x03(\x0b\x32\x1d.analysis.NormalityTestResult\x12:\n\x14\x63onfidence_intervals\x18\x03 \x03(\x0b\x32\x1c.analysis.ConfidenceInterval\x12\x38\n\x10hypothesis_tests\x18\x04 \x03(\x0b\x32\x1e.analysis.HypothesisTestResult\x12H\n\x1apearson_chi_square_results\x18\x05 \x03(\x0b\x32$.analysis.PearsonChiSquareTestResult\x12\x30\n\x0b\x63orrelation\x18\x06 \x01(\x0b\x32\x1b.analysis.CorrelationResult\x12/\n\x0bregressions\x18\x07 \x03(\x0b\x32\x1a.analysis.RegressionResult\x12\x43\n\x19\x62inomial_analysis_results\x18\x08 \x03(\x0b\x32 .analysis.BinomialAnalysisResult\x12\x16\n\x0eprocessing_log\x18\t \x03(\t\"\xf5\x01\n\x15\x44\x65scriptiveStatistics\x12\x15\n\rvariable_name\x18\x01 \x01(\t\x12\r\n\x05\x63ount\x18\x02 \x01(\x03\x12\x0c\n\x04mean\x18\x03 \x01(\x01\x12\x0e\n\x06median\x18\x04 \x01(\x01\x12\x0c\n\x04mode\x18\x05 \x03(\x01\x12\x10\n\x08variance\x18\x06 \x01(\x01\x12\x0f\n\x07std_dev\x18\x07 \x01(\x01\x12\x1d\n\x15variation_coefficient\x18\x08 \x01(\x01\x12\x10\n\x08skewness\x18\t \x01(\x01\x12\x10\n\x08kurtosis\x18\n \x01(\x01\x12\x11\n\tmin_value\x18\x0b \x01(\x01\x12\x11\n\tmax_value\x18\x0c \x01(\x01\"w\n\x13NormalityTestResult\x12\x15\n\rvariable_name\x18\x01 \x01(\t\x12\x11\n\ttest_name\x18\x02 \x01(\t\x12\x11\n\tstatistic\x18\x03 \x01(\x01\x12\x0f\n\x07p_value\x18\x04 \x01(\x01\x12\x12\n\nconclusion\x18\x05 \x01(\t\"\x87\x01\n\x12\x43onfidenceInterval\x12\x15\n\rvariable_name\x18\x01 \x01(\t\x12\x16\n\x0eparameter_name\x18\x02 \x01(\t\x12\x13\n\x0blower_bound\x18\x03 \x01(\x01\x12\x13\n\x0bupper_bound\x18\x04 \x01(\x01\x12\x18\n\x10\x63onfidence_level\x18\x05 \x01(\x01\"v\n\x14HypothesisTestResult\x12\x11\n\ttest_name\x18\x01 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x02 \x01(\t\x12\x11\n\tstatistic\x18\x03 \x01(\x01\x12\x0f\n\x07p_value\x18\x04 \x01(\x01\x12\x12\n\nconclusion\x18\x05 \x01(\t\"\xb0\x01\n\x1aPearsonChiSquareTestResult\x12\x15\n\rvariable_name\x18\x01 \x01(\t\x12\x11\n\tstatistic\x18\x02 \x01(\x01\x12\x1a\n\x12\x64\x65grees_of_freedom\x18\x03 \x01(\x05\x12\x0f\n\x07p_value\x18\x04 \x01(\x01\x12\x12\n\nconclusion\x18\x05 \x01(\t\x12\x11\n\ttest_name\x18\x06 \x01(\t\x12\x14\n\x0c\x64istribution\x18\x07 \x01(\t\"\xdc\x02\n\x11\x43orrelationResult\x12?\n\x07pearson\x18\x01 \x03(\x0b\x32..analysis.CorrelationResult.PearsonCorrelation\x12\x41\n\x08spearman\x18\x02 \x03(\x0b\x32/.analysis.CorrelationResult.SpearmanCorrelation\x1a`\n\x12PearsonCorrelation\x12\x11\n\tvariable1\x18\x01 \x01(\t\x12\x11\n\tvariable2\x18\x02 \x01(\t\x12\x13\n\x0b\x63oefficient\x18\x03 \x01(\x01\x12\x0f\n\x07p_value\x18\x04 \x01(\x01\x1a\x61\n\x13SpearmanCorrelation\x12\x11\n\tvariable1\x18\x01 \x01(\t\x12\x11\n\tvariable2\x18\x02 \x01(\t\x12\x13\n\x0b\x63oefficient\x18\x03 \x01(\x01\x12\x0f\n\x07p_value\x18\x04 \x01(\x01\"\xe7\x02\n\x10RegressionResult\x12\x12\n\nmodel_type\x18\x01 \x01(\t\x12\x1a\n\x12\x64\x65pendent_variable\x18\x02 \x01(\t\x12\x1d\n\x15independent_variables\x18\x03 \x03(\t\x12\x11\n\tr_squared\x18\x04 \x01(\x01\x12\x1a\n\x12\x61\x64justed_r_squared\x18\x05 \x01(\x01\x12\x13\n\x0b\x66_statistic\x18\x06 \x01(\x01\x12\x11\n\tf_p_value\x18\x07 \x01(\x01\x12<\n\x0c\x63oefficients\x18\x08 \x03(\x0b\x32&.analysis.RegressionResult.Coefficient\x1ao\n\x0b\x43oefficient\x12\x15\n\rvariable_name\x18\x01 \x01(\t\x12\x10\n\x08\x65stimate\x18\x02 \x01(\x01\x12\x11\n\tstd_error\x18\x03 \x01(\x01\x12\x13\n\x0bt_statistic\x18\x04 \x01(\x01\x12\x0f\n\x07p_value\x18\x05 \x01(\x01\"\xa6\x02\n\x16\x42inomialAnalysisResult\x12\x15\n\rvariable_name\x18\x01 \x01(\t\x12\x19\n\x11total_experiments\x18\x02 \x01(\x03\x12\x12\n\ninferred_n\x18\x03 \x01(\x03\x12\x17\n\x0ftotal_successes\x18\x04 \x01(\x03\x12\x16\n\x0e\x65stimated_prob\x18\x05 \x01(\x01\x12\x10\n\x08\x63i_lower\x18\x06 \x01(\x01\x12\x10\n\x08\x63i_upper\x18\x07 \x01(\x01\x12\x18\n\x10\x63onfidence_level\x18\x08 \x01(\x01\x12\x15\n\rgof_statistic\x18\t \x01(\x01\x12\x13\n\x0bgof_p_value\x18\n \x01(\x01\x12\x16\n\x0egof_conclusion\x18\x0b \x01(\t\x12\x13\n\x0bgof_warning\x18\x0c \x01(\x08\x32W\n\x0f\x41nalysisService\x12\x44\n\x0b\x41nalyzeData\x12\x19.analysis.AnalysisRequest\x1a\x1a.analysis.AnalysisResponseB\x17Z\x15./go-server/generatedb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -35,29 +35,29 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_ANALYSISREQUEST']._serialized_start=28
   _globals['_ANALYSISREQUEST']._serialized_end=86
   _globals['_ANALYSISRESPONSE']._serialized_start=89
-  _globals['_ANALYSISRESPONSE']._serialized_end=576
-  _globals['_DESCRIPTIVESTATISTICS']._serialized_start=579
-  _globals['_DESCRIPTIVESTATISTICS']._serialized_end=824
-  _globals['_NORMALITYTESTRESULT']._serialized_start=826
-  _globals['_NORMALITYTESTRESULT']._serialized_end=945
-  _globals['_CONFIDENCEINTERVAL']._serialized_start=948
-  _globals['_CONFIDENCEINTERVAL']._serialized_end=1083
-  _globals['_HYPOTHESISTESTRESULT']._serialized_start=1085
-  _globals['_HYPOTHESISTESTRESULT']._serialized_end=1203
-  _globals['_PEARSONCHISQUARETESTRESULT']._serialized_start=1206
-  _globals['_PEARSONCHISQUARETESTRESULT']._serialized_end=1339
-  _globals['_CORRELATIONRESULT']._serialized_start=1342
-  _globals['_CORRELATIONRESULT']._serialized_end=1690
-  _globals['_CORRELATIONRESULT_PEARSONCORRELATION']._serialized_start=1495
-  _globals['_CORRELATIONRESULT_PEARSONCORRELATION']._serialized_end=1591
-  _globals['_CORRELATIONRESULT_SPEARMANCORRELATION']._serialized_start=1593
-  _globals['_CORRELATIONRESULT_SPEARMANCORRELATION']._serialized_end=1690
-  _globals['_REGRESSIONRESULT']._serialized_start=1693
-  _globals['_REGRESSIONRESULT']._serialized_end=2052
-  _globals['_REGRESSIONRESULT_COEFFICIENT']._serialized_start=1941
-  _globals['_REGRESSIONRESULT_COEFFICIENT']._serialized_end=2052
-  _globals['_BINOMIALESTIMATE']._serialized_start=2054
-  _globals['_BINOMIALESTIMATE']._serialized_end=2166
-  _globals['_ANALYSISSERVICE']._serialized_start=2168
-  _globals['_ANALYSISSERVICE']._serialized_end=2255
+  _globals['_ANALYSISRESPONSE']._serialized_end=602
+  _globals['_DESCRIPTIVESTATISTICS']._serialized_start=605
+  _globals['_DESCRIPTIVESTATISTICS']._serialized_end=850
+  _globals['_NORMALITYTESTRESULT']._serialized_start=852
+  _globals['_NORMALITYTESTRESULT']._serialized_end=971
+  _globals['_CONFIDENCEINTERVAL']._serialized_start=974
+  _globals['_CONFIDENCEINTERVAL']._serialized_end=1109
+  _globals['_HYPOTHESISTESTRESULT']._serialized_start=1111
+  _globals['_HYPOTHESISTESTRESULT']._serialized_end=1229
+  _globals['_PEARSONCHISQUARETESTRESULT']._serialized_start=1232
+  _globals['_PEARSONCHISQUARETESTRESULT']._serialized_end=1408
+  _globals['_CORRELATIONRESULT']._serialized_start=1411
+  _globals['_CORRELATIONRESULT']._serialized_end=1759
+  _globals['_CORRELATIONRESULT_PEARSONCORRELATION']._serialized_start=1564
+  _globals['_CORRELATIONRESULT_PEARSONCORRELATION']._serialized_end=1660
+  _globals['_CORRELATIONRESULT_SPEARMANCORRELATION']._serialized_start=1662
+  _globals['_CORRELATIONRESULT_SPEARMANCORRELATION']._serialized_end=1759
+  _globals['_REGRESSIONRESULT']._serialized_start=1762
+  _globals['_REGRESSIONRESULT']._serialized_end=2121
+  _globals['_REGRESSIONRESULT_COEFFICIENT']._serialized_start=2010
+  _globals['_REGRESSIONRESULT_COEFFICIENT']._serialized_end=2121
+  _globals['_BINOMIALANALYSISRESULT']._serialized_start=2124
+  _globals['_BINOMIALANALYSISRESULT']._serialized_end=2418
+  _globals['_ANALYSISSERVICE']._serialized_start=2420
+  _globals['_ANALYSISSERVICE']._serialized_end=2507
 # @@protoc_insertion_point(module_scope)

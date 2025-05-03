@@ -14,26 +14,26 @@ class AnalysisRequest(_message.Message):
     def __init__(self, file_content: _Optional[bytes] = ..., file_name: _Optional[str] = ...) -> None: ...
 
 class AnalysisResponse(_message.Message):
-    __slots__ = ("descriptives", "normality_tests", "confidence_intervals", "hypothesis_tests", "chi_square_test", "correlation", "regression", "binomial_estimate", "processing_log")
+    __slots__ = ("descriptives", "normality_tests", "confidence_intervals", "hypothesis_tests", "pearson_chi_square_results", "correlation", "regressions", "binomial_analysis_results", "processing_log")
     DESCRIPTIVES_FIELD_NUMBER: _ClassVar[int]
     NORMALITY_TESTS_FIELD_NUMBER: _ClassVar[int]
     CONFIDENCE_INTERVALS_FIELD_NUMBER: _ClassVar[int]
     HYPOTHESIS_TESTS_FIELD_NUMBER: _ClassVar[int]
-    CHI_SQUARE_TEST_FIELD_NUMBER: _ClassVar[int]
+    PEARSON_CHI_SQUARE_RESULTS_FIELD_NUMBER: _ClassVar[int]
     CORRELATION_FIELD_NUMBER: _ClassVar[int]
-    REGRESSION_FIELD_NUMBER: _ClassVar[int]
-    BINOMIAL_ESTIMATE_FIELD_NUMBER: _ClassVar[int]
+    REGRESSIONS_FIELD_NUMBER: _ClassVar[int]
+    BINOMIAL_ANALYSIS_RESULTS_FIELD_NUMBER: _ClassVar[int]
     PROCESSING_LOG_FIELD_NUMBER: _ClassVar[int]
     descriptives: _containers.RepeatedCompositeFieldContainer[DescriptiveStatistics]
     normality_tests: _containers.RepeatedCompositeFieldContainer[NormalityTestResult]
     confidence_intervals: _containers.RepeatedCompositeFieldContainer[ConfidenceInterval]
     hypothesis_tests: _containers.RepeatedCompositeFieldContainer[HypothesisTestResult]
-    chi_square_test: PearsonChiSquareTestResult
+    pearson_chi_square_results: _containers.RepeatedCompositeFieldContainer[PearsonChiSquareTestResult]
     correlation: CorrelationResult
-    regression: RegressionResult
-    binomial_estimate: BinomialEstimate
+    regressions: _containers.RepeatedCompositeFieldContainer[RegressionResult]
+    binomial_analysis_results: _containers.RepeatedCompositeFieldContainer[BinomialAnalysisResult]
     processing_log: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, descriptives: _Optional[_Iterable[_Union[DescriptiveStatistics, _Mapping]]] = ..., normality_tests: _Optional[_Iterable[_Union[NormalityTestResult, _Mapping]]] = ..., confidence_intervals: _Optional[_Iterable[_Union[ConfidenceInterval, _Mapping]]] = ..., hypothesis_tests: _Optional[_Iterable[_Union[HypothesisTestResult, _Mapping]]] = ..., chi_square_test: _Optional[_Union[PearsonChiSquareTestResult, _Mapping]] = ..., correlation: _Optional[_Union[CorrelationResult, _Mapping]] = ..., regression: _Optional[_Union[RegressionResult, _Mapping]] = ..., binomial_estimate: _Optional[_Union[BinomialEstimate, _Mapping]] = ..., processing_log: _Optional[_Iterable[str]] = ...) -> None: ...
+    def __init__(self, descriptives: _Optional[_Iterable[_Union[DescriptiveStatistics, _Mapping]]] = ..., normality_tests: _Optional[_Iterable[_Union[NormalityTestResult, _Mapping]]] = ..., confidence_intervals: _Optional[_Iterable[_Union[ConfidenceInterval, _Mapping]]] = ..., hypothesis_tests: _Optional[_Iterable[_Union[HypothesisTestResult, _Mapping]]] = ..., pearson_chi_square_results: _Optional[_Iterable[_Union[PearsonChiSquareTestResult, _Mapping]]] = ..., correlation: _Optional[_Union[CorrelationResult, _Mapping]] = ..., regressions: _Optional[_Iterable[_Union[RegressionResult, _Mapping]]] = ..., binomial_analysis_results: _Optional[_Iterable[_Union[BinomialAnalysisResult, _Mapping]]] = ..., processing_log: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class DescriptiveStatistics(_message.Message):
     __slots__ = ("variable_name", "count", "mean", "median", "mode", "variance", "std_dev", "variation_coefficient", "skewness", "kurtosis", "min_value", "max_value")
@@ -106,18 +106,22 @@ class HypothesisTestResult(_message.Message):
     def __init__(self, test_name: _Optional[str] = ..., description: _Optional[str] = ..., statistic: _Optional[float] = ..., p_value: _Optional[float] = ..., conclusion: _Optional[str] = ...) -> None: ...
 
 class PearsonChiSquareTestResult(_message.Message):
-    __slots__ = ("description", "statistic", "degrees_of_freedom", "p_value", "conclusion")
-    DESCRIPTION_FIELD_NUMBER: _ClassVar[int]
+    __slots__ = ("variable_name", "statistic", "degrees_of_freedom", "p_value", "conclusion", "test_name", "distribution")
+    VARIABLE_NAME_FIELD_NUMBER: _ClassVar[int]
     STATISTIC_FIELD_NUMBER: _ClassVar[int]
     DEGREES_OF_FREEDOM_FIELD_NUMBER: _ClassVar[int]
     P_VALUE_FIELD_NUMBER: _ClassVar[int]
     CONCLUSION_FIELD_NUMBER: _ClassVar[int]
-    description: str
+    TEST_NAME_FIELD_NUMBER: _ClassVar[int]
+    DISTRIBUTION_FIELD_NUMBER: _ClassVar[int]
+    variable_name: str
     statistic: float
     degrees_of_freedom: int
     p_value: float
     conclusion: str
-    def __init__(self, description: _Optional[str] = ..., statistic: _Optional[float] = ..., degrees_of_freedom: _Optional[int] = ..., p_value: _Optional[float] = ..., conclusion: _Optional[str] = ...) -> None: ...
+    test_name: str
+    distribution: str
+    def __init__(self, variable_name: _Optional[str] = ..., statistic: _Optional[float] = ..., degrees_of_freedom: _Optional[int] = ..., p_value: _Optional[float] = ..., conclusion: _Optional[str] = ..., test_name: _Optional[str] = ..., distribution: _Optional[str] = ...) -> None: ...
 
 class CorrelationResult(_message.Message):
     __slots__ = ("pearson", "spearman")
@@ -182,14 +186,30 @@ class RegressionResult(_message.Message):
     coefficients: _containers.RepeatedCompositeFieldContainer[RegressionResult.Coefficient]
     def __init__(self, model_type: _Optional[str] = ..., dependent_variable: _Optional[str] = ..., independent_variables: _Optional[_Iterable[str]] = ..., r_squared: _Optional[float] = ..., adjusted_r_squared: _Optional[float] = ..., f_statistic: _Optional[float] = ..., f_p_value: _Optional[float] = ..., coefficients: _Optional[_Iterable[_Union[RegressionResult.Coefficient, _Mapping]]] = ...) -> None: ...
 
-class BinomialEstimate(_message.Message):
-    __slots__ = ("variable_name", "total_trials", "successes", "probability_estimate")
+class BinomialAnalysisResult(_message.Message):
+    __slots__ = ("variable_name", "total_experiments", "inferred_n", "total_successes", "estimated_prob", "ci_lower", "ci_upper", "confidence_level", "gof_statistic", "gof_p_value", "gof_conclusion", "gof_warning")
     VARIABLE_NAME_FIELD_NUMBER: _ClassVar[int]
-    TOTAL_TRIALS_FIELD_NUMBER: _ClassVar[int]
-    SUCCESSES_FIELD_NUMBER: _ClassVar[int]
-    PROBABILITY_ESTIMATE_FIELD_NUMBER: _ClassVar[int]
+    TOTAL_EXPERIMENTS_FIELD_NUMBER: _ClassVar[int]
+    INFERRED_N_FIELD_NUMBER: _ClassVar[int]
+    TOTAL_SUCCESSES_FIELD_NUMBER: _ClassVar[int]
+    ESTIMATED_PROB_FIELD_NUMBER: _ClassVar[int]
+    CI_LOWER_FIELD_NUMBER: _ClassVar[int]
+    CI_UPPER_FIELD_NUMBER: _ClassVar[int]
+    CONFIDENCE_LEVEL_FIELD_NUMBER: _ClassVar[int]
+    GOF_STATISTIC_FIELD_NUMBER: _ClassVar[int]
+    GOF_P_VALUE_FIELD_NUMBER: _ClassVar[int]
+    GOF_CONCLUSION_FIELD_NUMBER: _ClassVar[int]
+    GOF_WARNING_FIELD_NUMBER: _ClassVar[int]
     variable_name: str
-    total_trials: int
-    successes: int
-    probability_estimate: float
-    def __init__(self, variable_name: _Optional[str] = ..., total_trials: _Optional[int] = ..., successes: _Optional[int] = ..., probability_estimate: _Optional[float] = ...) -> None: ...
+    total_experiments: int
+    inferred_n: int
+    total_successes: int
+    estimated_prob: float
+    ci_lower: float
+    ci_upper: float
+    confidence_level: float
+    gof_statistic: float
+    gof_p_value: float
+    gof_conclusion: str
+    gof_warning: bool
+    def __init__(self, variable_name: _Optional[str] = ..., total_experiments: _Optional[int] = ..., inferred_n: _Optional[int] = ..., total_successes: _Optional[int] = ..., estimated_prob: _Optional[float] = ..., ci_lower: _Optional[float] = ..., ci_upper: _Optional[float] = ..., confidence_level: _Optional[float] = ..., gof_statistic: _Optional[float] = ..., gof_p_value: _Optional[float] = ..., gof_conclusion: _Optional[str] = ..., gof_warning: bool = ...) -> None: ...
