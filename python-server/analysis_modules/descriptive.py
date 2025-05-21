@@ -2,10 +2,16 @@
 import pandas as pd
 import numpy as np
 from typing import List, Dict, Any, Tuple
+# Импортируем сгенерированные классы protobuf
+import analysis_pb2 
 
-def calculate_descriptive_stats(df: pd.DataFrame) -> Tuple[List[Dict[str, Any]], List[str]]:
+# Define a type hint for the histogram data dictionary
+HistogramResultDict = Dict[str, Any]
+
+# Updated return type hint to remove box plot data
+def calculate_descriptive_stats(df: pd.DataFrame) -> Tuple[List[Dict[str, Any]], List[HistogramResultDict], List[str]]:
     """
-    Вычисляет описательные статистики для числовых столбцов DataFrame.
+    Вычисляет описательные статистики и данные гистограмм для числовых столбцов DataFrame.
 
     Args:
         df: Входной DataFrame.
@@ -13,15 +19,17 @@ def calculate_descriptive_stats(df: pd.DataFrame) -> Tuple[List[Dict[str, Any]],
     Returns:
         Кортеж:
         - Список словарей, где каждый словарь представляет статистики одного столбца.
+        - Список словарей, где каждый словарь представляет данные гистограммы одного столбца.
         - Список строк с логами обработки.
     """
-    results = []
+    descriptive_results = []
+    histogram_results = [] # New list for histogram data
     logs = []
     numerical_cols = df.select_dtypes(include=np.number).columns.tolist()
 
     if not numerical_cols:
         logs.append("No numerical columns found for descriptive statistics.")
-        return [], logs
+        return [], [], logs # Return empty lists for all results
 
     logs.append(f"Found numerical columns for descriptives: {', '.join(numerical_cols)}")
 
@@ -29,9 +37,10 @@ def calculate_descriptive_stats(df: pd.DataFrame) -> Tuple[List[Dict[str, Any]],
         col_data = df[col_name].dropna()
 
         if col_data.empty:
-            logs.append(f"Skipping descriptive statistics for column '{col_name}' (all values are NaN).")
+            logs.append(f"Skipping descriptive statistics and histogram for column '{col_name}' (all values are NaN).")
             continue
 
+        # --- Descriptive Stats ---    
         count = int(col_data.count()) # Приводим к int
         mean_val = float(col_data.mean())
         median_val = float(col_data.median())
@@ -64,7 +73,27 @@ def calculate_descriptive_stats(df: pd.DataFrame) -> Tuple[List[Dict[str, Any]],
             "min_value": min_val,
             "max_value": max_val,
         }
-        results.append(stats_dict)
+        descriptive_results.append(stats_dict)
         logs.append(f"Calculated descriptives for '{col_name}'.")
 
-    return results, logs 
+        # --- Histogram Calculation --- 
+        try:
+            # Use numpy.histogram. Let numpy determine the optimal bins ('auto')
+            # We need frequencies (counts in each bin) and bin_edges
+            frequencies, bin_edges = np.histogram(col_data, bins='auto')
+            
+            # Prepare histogram data dictionary
+            hist_dict: HistogramResultDict = {
+                 "variable_name": col_name,
+                 "bins": bin_edges.tolist(), # Convert numpy array to list
+                 "frequencies": frequencies.tolist() # Convert numpy array to list
+            }
+            histogram_results.append(hist_dict)
+            logs.append(f"Calculated histogram data for '{col_name}' (bins: {len(frequencies)}).")
+        except Exception as e:
+            logs.append(f"Warning: Could not calculate histogram for '{col_name}': {e}")
+            # Optionally append a placeholder or skip if histogram fails
+            # histogram_results.append({"variable_name": col_name, "bins": [], "frequencies": []}) 
+
+    # Return only three lists (no boxplot_results)
+    return descriptive_results, histogram_results, logs 

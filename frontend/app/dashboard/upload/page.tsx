@@ -1,14 +1,61 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useDropzone } from "react-dropzone"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { useToast } from "@/hooks/use-toast"
 import { useTranslation } from "@/components/language-provider"
 import { Upload, X, FileText, FileSpreadsheet, FileJson, AlertCircle, CheckCircle2 } from "lucide-react"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { DistributionChart } from "@/components/charts/distribution-chart"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
+import { RegressionChart } from "@/components/charts/regression-chart"
+
+// Helper function to format numbers, handling potential non-numeric modes
+function formatNumber(value: number | string | null | undefined, decimals = 3): string {
+  if (value === null || value === undefined) return "N/A";
+  const num = Number(value);
+  if (isNaN(num)) return String(value); // Return original string if mode is non-numeric
+  return num.toFixed(decimals);
+}
+
+// Define types for regression analysis data
+interface RegressionCoefficient {
+  variable_name: string;
+  coefficient: number;
+  std_error: number;
+  t_statistic: number;
+  p_value: number;
+  confidence_interval_lower: number;
+  confidence_interval_upper: number;
+}
+
+interface RegressionModel {
+  regression_type: string;
+  r_squared: number;
+  adjusted_r_squared: number;
+  f_statistic: number;
+  prob_f_statistic: number;
+  sse: number;
+  coefficients: RegressionCoefficient[];
+}
+
+interface DataPoint {
+  x: number;
+  y: number;
+}
+
+interface RegressionAnalysisResponse {
+  dependent_variable: string;
+  independent_variables: string[];
+  data_points: DataPoint[];
+  models: RegressionModel[];
+}
 
 export default function UploadPage() {
   const { t } = useTranslation()
@@ -18,6 +65,15 @@ export default function UploadPage() {
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "success" | "error">("idle")
+  const [analysisResult, setAnalysisResult] = useState<any | null>(null)
+  const [selectedAnalysesOptions, setSelectedAnalysesOptions] = useState({
+    descriptive_stats: true,
+    normality_test: true,
+    regression: false,
+  });
+  const [fileColumns, setFileColumns] = useState<string[]>([]);
+  const [dependentVariable, setDependentVariable] = useState<string>("");
+  const [independentVariable, setIndependentVariable] = useState<string>("");
 
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
@@ -28,7 +84,6 @@ export default function UploadPage() {
           toast({
             title: "Файл слишком большой",
             description: `Файл "${file.name}" превышает максимальный размер в 200 МБ`,
-            variant: "destructive",
           })
           return false
         }
@@ -39,7 +94,6 @@ export default function UploadPage() {
           toast({
             title: "Неподдерживаемый формат",
             description: `Файл "${file.name}" имеет неподдерживаемый формат. Поддерживаются только CSV, XLSX и JSON`,
-            variant: "destructive",
           })
           return false
         }
@@ -48,9 +102,25 @@ export default function UploadPage() {
       })
 
       setFiles((prev) => [...prev, ...validFiles])
+      
+      // Clear previous columns and variable selections when new file is dropped
+      setFileColumns([])
+      setDependentVariable("")
+      setIndependentVariable("")
     },
     [toast],
   )
+
+  // Function to clear all states
+  const clearAll = () => {
+    setFiles([])
+    setFileColumns([])
+    setDependentVariable("")
+    setIndependentVariable("")
+    setUploadStatus("idle")
+    setUploadProgress(0)
+    setAnalysisResult(null)
+  }
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -79,10 +149,68 @@ export default function UploadPage() {
     }
   }
 
+  // Function to fetch column names from the uploaded file
+  const fetchColumnNames = async () => {
+    if (files.length === 0) return;
+    
+    try {
+      const formData = new FormData();
+      formData.append('file', files[0]);
+      
+      const response = await fetch('http://localhost:8080/api/columns', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Error fetching columns: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      if (result.columns && Array.isArray(result.columns)) {
+        setFileColumns(result.columns);
+      }
+    } catch (error) {
+      console.error("Failed to fetch columns:", error);
+      toast({
+        title: "Ошибка получения столбцов",
+        description: "Не удалось получить список столбцов файла.",
+      });
+    }
+  };
+  
+  // Call fetchColumnNames when a file is selected
+  useEffect(() => {
+    if (files.length > 0) {
+      fetchColumnNames();
+    }
+  }, [files]);
+
   const handleUpload = async () => {
     if (files.length === 0) return
 
+    // Validate regression selections if regression is selected
+    if (selectedAnalysesOptions.regression) {
+      if (!dependentVariable || !independentVariable) {
+        toast({
+          title: "Отсутствуют переменные для регрессии",
+          description: "Пожалуйста, выберите зависимую и независимую переменные для регрессионного анализа.",
+        });
+        return;
+      }
+      
+      if (dependentVariable === independentVariable) {
+        toast({
+          title: "Некорректный выбор переменных",
+          description: "Зависимая и независимая переменные должны отличаться.",
+        });
+        return;
+      }
+    }
+
     setUploading(true)
+    setUploadStatus("idle")
+    setAnalysisResult(null)
     setUploadStatus("uploading")
     setUploadProgress(0)
 
@@ -102,7 +230,33 @@ export default function UploadPage() {
 
     try {
       const formData = new FormData();
-      formData.append('file', fileToUpload); // 'file' - имя поля, которое ожидает Go
+      formData.append('file', fileToUpload); // \'file\' - имя поля, которое ожидает Go
+
+      // Add selected analyses to FormData
+      const analysesToPerform = Object.entries(selectedAnalysesOptions)
+        .filter(([_,isSelected]) => isSelected)
+        .map(([key,_]) => key);
+
+      if (analysesToPerform.length === 0) {
+        toast({
+          title: t("noAnalysesSelectedTitle"),
+          description: t("noAnalysesSelectedDesc"),
+        });
+        setUploading(false);
+        clearInterval(interval);
+        setUploadStatus("idle");
+        return;
+      }
+      
+      analysesToPerform.forEach(analysis => {
+        formData.append('selected_analyses', analysis);
+      });
+      
+      // Add regression variables if regression analysis is selected
+      if (selectedAnalysesOptions.regression) {
+        formData.append('dependent_variable', dependentVariable);
+        formData.append('independent_variable', independentVariable);
+      }
 
       const response = await fetch('http://localhost:8080/api/analyze', { // <<-- URL Go API
         method: 'POST',
@@ -126,6 +280,7 @@ export default function UploadPage() {
 
       const result = await response.json();
       console.log('Analysis Result:', result);
+      setAnalysisResult(result);
       setUploadStatus("success");
 
       toast({
@@ -133,34 +288,24 @@ export default function UploadPage() {
         description: "Анализ успешно завершен.", // Можно обновить сообщение
       });
 
-      // TODO: Обработать результат 'result'
-      // Например, извлечь ID результата и перенаправить
-      // const resultId = result.analysisId; // Предположим, что API возвращает ID
-      // router.push(`/dashboard/results/${resultId}`);
-
-      // Пока просто перенаправляем на дашборд через 2 сек
-       setTimeout(() => {
-         router.push("/dashboard");
-       }, 2000);
-
-
     } catch (error) {
       clearInterval(interval);
       setUploadStatus("error");
       setUploadProgress(0); // Сбрасываем прогресс при ошибке
+      setAnalysisResult(null);
       console.error("Upload failed:", error);
 
       toast({
         title: t("uploadError"),
         description: error instanceof Error ? error.message : "Произошла ошибка при отправке или анализе файла.",
-        variant: "destructive",
       });
       // Разблокируем кнопку после ошибки через некоторое время
       setTimeout(() => { setUploading(false); }, 500);
     } finally {
-      // Убрано из finally, чтобы кнопка оставалась заблокированной при успехе до редиректа
-      // Если нужно разблокировать кнопку при успехе раньше, можно вернуть сюда:
-      // setTimeout(() => { setUploading(false); }, 2000);
+       // Разблокируем кнопку и здесь, если не было ошибки
+       if (uploadStatus !== 'error') {
+           setTimeout(() => { setUploading(false); }, 500); // Разблокируем после небольшого таймаута
+       }
     }
   }
 
@@ -199,7 +344,7 @@ export default function UploadPage() {
             <div className="mt-6 space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="font-medium">Выбранные файлы</h3>
-                <Button variant="ghost" size="sm" onClick={() => setFiles([])} disabled={uploading}>
+                <Button variant="ghost" size="sm" onClick={clearAll} disabled={uploading}>
                   Очистить все
                 </Button>
               </div>
@@ -220,6 +365,93 @@ export default function UploadPage() {
                   </div>
                 ))}
               </div>
+
+              {/* Analysis Selection Checkboxes */}
+              <div className="mt-6 space-y-4">
+                <h3 className="font-medium">Выберите анализы для выполнения:</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="descriptive_stats"
+                      checked={selectedAnalysesOptions.descriptive_stats}
+                      onCheckedChange={(checked) =>
+                        setSelectedAnalysesOptions((prev) => ({ ...prev, descriptive_stats: !!checked }))
+                      }
+                      disabled={uploading}
+                    />
+                    <Label htmlFor="descriptive_stats" className="cursor-pointer">
+                      Описательная статистика
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="normality_test"
+                      checked={selectedAnalysesOptions.normality_test}
+                      onCheckedChange={(checked) =>
+                        setSelectedAnalysesOptions((prev) => ({ ...prev, normality_test: !!checked }))
+                      }
+                      disabled={uploading}
+                    />
+                    <Label htmlFor="normality_test" className="cursor-pointer">
+                      Проверка нормальности
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="regression"
+                      checked={selectedAnalysesOptions.regression}
+                      onCheckedChange={(checked) =>
+                        setSelectedAnalysesOptions((prev) => ({ ...prev, regression: !!checked }))
+                      }
+                      disabled={uploading}
+                    />
+                    <Label htmlFor="regression" className="cursor-pointer">
+                      Регрессия
+                    </Label>
+                  </div>
+                </div>
+              </div>
+              {/* End Analysis Selection Checkboxes */}
+              
+              {/* Regression Variable Selection */}
+              {selectedAnalysesOptions.regression && fileColumns.length > 0 && (
+                <div className="mt-4 p-4 border rounded-md bg-gray-50">
+                  <h3 className="font-medium mb-3">Переменные для регрессии:</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="dependent-variable">Зависимая переменная (Y):</Label>
+                      <select
+                        id="dependent-variable"
+                        value={dependentVariable}
+                        onChange={(e) => setDependentVariable(e.target.value)}
+                        className="w-full p-2 border rounded-md"
+                        disabled={uploading}
+                      >
+                        <option value="">Выберите переменную</option>
+                        {fileColumns.map((column) => (
+                          <option key={`dep-${column}`} value={column}>{column}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="independent-variable">Независимая переменная (X):</Label>
+                      <select
+                        id="independent-variable"
+                        value={independentVariable}
+                        onChange={(e) => setIndependentVariable(e.target.value)}
+                        className="w-full p-2 border rounded-md"
+                        disabled={uploading}
+                      >
+                        <option value="">Выберите переменную</option>
+                        {fileColumns.map((column) => (
+                          <option key={`indep-${column}`} value={column}>{column}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {/* End Regression Variable Selection */}
 
               {uploadStatus !== "idle" && (
                 <div className="mt-4 space-y-2">
@@ -243,7 +475,7 @@ export default function UploadPage() {
                   {uploadStatus === "error" && (
                     <div className="flex items-center gap-2 text-red-600 text-sm mt-2">
                       <AlertCircle className="h-4 w-4" />
-                      <span>Произошла ошибка при загрузке файлов</span>
+                      <span>{t("uploadFailedMessage")}</span>
                     </div>
                   )}
                 </div>
@@ -284,6 +516,355 @@ export default function UploadPage() {
           )}
         </CardContent>
       </Card>
+
+      { /* --- Display Analysis Results --- */ }
+      {analysisResult && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Результаты Анализа</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Tabs defaultValue="descriptive-stats" className="w-full">
+              <TabsList className="grid w-full grid-cols-3 mb-4">
+                {analysisResult?.descriptive_stats && (
+                    <TabsTrigger value="descriptive-stats">{t("results.tabs.descriptiveStats")}</TabsTrigger>
+                )}
+                {analysisResult?.normality_tests && (
+                    <TabsTrigger value="normality-test">{t("results.tabs.normalityTest")}</TabsTrigger>
+                )}
+                {analysisResult?.regression_analysis && (
+                    <TabsTrigger value="regression">{t("results.tabs.regression")}</TabsTrigger>
+                )}
+              </TabsList>
+
+              {analysisResult?.descriptive_stats && (
+                <TabsContent value="descriptive-stats">
+                <Card>
+                  <CardHeader>
+                      <CardTitle>{t("results.tabs.descriptiveStats")}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Переменная</TableHead>
+                          <TableHead>Кол-во</TableHead>
+                          <TableHead>Среднее</TableHead>
+                          <TableHead>Медиана</TableHead>
+                          <TableHead>Мода</TableHead>
+                          <TableHead>Стд.Откл.</TableHead>
+                          <TableHead>Мин.</TableHead>
+                          <TableHead>Макс.</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {analysisResult.descriptive_stats.descriptives?.map((stat: any, index: number) => (
+                          <TableRow key={`desc-${index}-${stat.variable_name}`}>
+                            <TableCell>{stat.variable_name}</TableCell>
+                            <TableCell>{stat.count}</TableCell>
+                            <TableCell>{formatNumber(stat.mean)}</TableCell>
+                            <TableCell>{formatNumber(stat.median)}</TableCell>
+                            <TableCell>
+                              {Array.isArray(stat.mode) 
+                                ? (stat.mode.length > 5 || stat.mode.length === Number(stat.count)) 
+                                  ? (stat.mode.length === Number(stat.count) ? "Уникальные" : `Множество (${stat.mode.length})`) 
+                                  : stat.mode.map((m: number | string) => formatNumber(m, 2)).join(", ")
+                                : formatNumber(stat.mode, 2)}
+                            </TableCell>
+                            <TableCell>{formatNumber(stat.std_dev)}</TableCell>
+                            <TableCell>{formatNumber(stat.min_value)}</TableCell>
+                            <TableCell>{formatNumber(stat.max_value)}</TableCell>
+                          </TableRow>
+                        )) ?? (
+                          <TableRow>
+                            <TableCell colSpan={8} className="text-center">Нет данных</TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+
+                    {/* Add Histograms Here */}
+                    <div>
+                      <h3 className="text-lg font-semibold mb-4">Гистограммы Распределения</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {analysisResult.descriptive_stats.histograms?.map((hist: any, index: number) => {
+                           return (
+                             <div key={`hist-${index}-${hist.column_name}`} className="border rounded-lg p-4">
+                               <h4 className="text-md font-semibold mb-2 text-center">{hist.column_name}</h4>
+                               {/* Ensure data structure is correct before passing */}
+                               {hist.bins && hist.frequencies && hist.bins.length > 0 && hist.frequencies.length > 0 ? (
+                                 <DistributionChart 
+                                   data={{ bins: hist.bins, frequencies: hist.frequencies }} 
+                                   variableName={hist.column_name}
+                                 />
+                               ) : (
+                                 <p className="text-sm text-center text-gray-500">Нет данных для гистограммы '{hist.column_name}'</p>
+                               )}
+                             </div>
+                           );
+                        }) ?? (
+                           <p className="text-sm text-center text-gray-500 md:col-span-2">Нет данных для гистограмм.</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Add Confidence Intervals Here */}
+                    <div>
+                      <h3 className="text-lg font-semibold mb-4">Доверительные Интервалы</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {analysisResult.descriptive_stats.confidence_intervals?.map((ci: any, index: number) => (
+                          <div key={`ci-${index}-${ci.column_name}`} className="border rounded-lg p-4">
+                             <h4 className="text-md font-semibold mb-2 text-center">{ci.column_name}</h4>
+                             <div className="space-y-2">
+                               <p><strong>Уровень доверия:</strong> {(ci.confidence_level * 100).toFixed(0)}%</p>
+                               <p><strong>Интервал:</strong> [{formatNumber(ci.lower_bound)}, {formatNumber(ci.upper_bound)}]</p>
+                               <p><strong>Среднее:</strong> {formatNumber(ci.mean)}</p>
+                               <p><strong>Стандартная ошибка:</strong> {formatNumber(ci.standard_error)}</p>
+                             </div>
+                          </div>
+                        )) ?? (
+                           <p className="text-sm text-center text-gray-500 md:col-span-2">Нет данных для доверительных интервалов.</p>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              )}
+
+              {analysisResult?.normality_tests && (
+                <TabsContent value="normality-test">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Тесты на Нормальность</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {/* Shapiro-Wilk Test Results */}
+                    <div>
+                      <h3 className="text-lg font-semibold mb-4">Тест Шапиро-Уилка</h3>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Переменная</TableHead>
+                          <TableHead>Статистика</TableHead>
+                          <TableHead>P-значение</TableHead>
+                          <TableHead>Вывод (alpha=0.05)</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                          {analysisResult.normality_tests.shapiro_wilk_results?.map((test: any, index: number) => (
+                            <TableRow key={`sw-${index}-${test.column_name}`}>
+                              <TableCell>{test.column_name}</TableCell>
+                            <TableCell>{formatNumber(test.statistic)}</TableCell>
+                            <TableCell>{formatNumber(test.p_value)}</TableCell>
+                              <TableCell>
+                                {test.is_normal 
+                                  ? "Распределение нормальное (p > 0.05)" 
+                                  : "Распределение не нормальное (p ≤ 0.05)"}
+                              </TableCell>
+                          </TableRow>
+                        )) ?? (
+                          <TableRow>
+                            <TableCell colSpan={4} className="text-center">Нет данных</TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                    </div>
+
+                    {/* Chi-Square Test Results */}
+                    <div>
+                      <h3 className="text-lg font-semibold mb-4">Тест Хи-квадрат (Пирсона)</h3>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Переменная</TableHead>
+                          <TableHead>Статистика</TableHead>
+                            <TableHead>P-значение</TableHead>
+                          <TableHead>Степени свободы</TableHead>
+                            <TableHead>Интервалы</TableHead>
+                          <TableHead>Вывод (alpha=0.05)</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                          {analysisResult.normality_tests.chi_square_results?.map((test: any, index: number) => (
+                            <TableRow key={`chi2-${index}-${test.column_name}`}>
+                              <TableCell>{test.column_name}</TableCell>
+                              <TableCell>{formatNumber(test.statistic)}</TableCell>
+                              <TableCell>{formatNumber(test.p_value)}</TableCell>
+                              <TableCell>{test.degrees_of_freedom}</TableCell>
+                              <TableCell>{test.intervals}</TableCell>
+                              <TableCell>
+                                {test.is_normal 
+                                  ? "Распределение нормальное (p > 0.05)" 
+                                  : "Распределение не нормальное (p ≤ 0.05)"}
+                              </TableCell>
+                            </TableRow>
+                        )) ?? (
+                          <TableRow>
+                              <TableCell colSpan={6} className="text-center">Нет данных</TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              )}
+
+              {analysisResult?.regression_analysis && (
+              <TabsContent value="regression">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Регрессионный Анализ</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-6">
+                      {/* Regression Chart */}
+                      {analysisResult.regression_analysis.data_points && analysisResult.regression_analysis.data_points.length > 0 && (
+                        <div className="mb-6 space-y-8">
+                          <h3 className="text-lg font-semibold mb-2">Графики регрессии</h3>
+                          {/* Render each model on a separate chart */}
+                          {analysisResult.regression_analysis.models.map((model: RegressionModel, idx: number) => (
+                            <div key={`regression-chart-${idx}`} className="border rounded-lg p-4">
+                              <h4 className="text-md font-semibold mb-2 text-center">
+                                {model.regression_type} (R² = {formatNumber(model.r_squared)})
+                              </h4>
+                              <RegressionChart 
+                                data={analysisResult.regression_analysis.data_points}
+                                models={[{
+                                  type: model.regression_type,
+                                  coefficients: model.coefficients,
+                                  r_squared: model.r_squared
+                                }]}
+                                dependentVar={analysisResult.regression_analysis.dependent_variable}
+                                independentVar={analysisResult.regression_analysis.independent_variables[0]}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <p><strong>Зависимая переменная:</strong> {analysisResult.regression_analysis.dependent_variable}</p>
+                          <p><strong>Независимые переменные:</strong> {analysisResult.regression_analysis.independent_variables.join(", ")}</p>
+                        </div>
+                      </div>
+                      
+                      {/* Show all regression models in a table */}
+                      <div className="mt-6">
+                        <h3 className="text-lg font-semibold mb-4">Сравнение моделей регрессии</h3>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Тип модели</TableHead>
+                              <TableHead>R²</TableHead>
+                              <TableHead>Скорр. R²</TableHead>
+                              <TableHead>SSE</TableHead>
+                              {analysisResult.regression_analysis.models.some((m: RegressionModel) => m.regression_type === "Linear") && (
+                                <>
+                                  <TableHead>F-статистика</TableHead>
+                              <TableHead>P-значение</TableHead>
+                                </>
+                              )}
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {analysisResult.regression_analysis.models
+                              // Sort models by R² (highest first)
+                              .sort((a: RegressionModel, b: RegressionModel) => b.r_squared - a.r_squared)
+                              .map((model: RegressionModel, idx: number) => (
+                                <TableRow key={`model-${idx}`}>
+                                  <TableCell>{model.regression_type}</TableCell>
+                                  <TableCell>{formatNumber(model.r_squared)}</TableCell>
+                                  <TableCell>{formatNumber(model.adjusted_r_squared)}</TableCell>
+                                  <TableCell>{formatNumber(model.sse)}</TableCell>
+                                  {analysisResult.regression_analysis.models.some((m: RegressionModel) => m.regression_type === "Linear") && (
+                                    <>
+                                      <TableCell>
+                                        {model.regression_type === "Linear" 
+                                          ? formatNumber(model.f_statistic)
+                                          : "-"}
+                                      </TableCell>
+                                      <TableCell>
+                                        {model.regression_type === "Linear" 
+                                          ? formatNumber(model.prob_f_statistic)
+                                          : "-"}
+                                      </TableCell>
+                                    </>
+                                  )}
+                              </TableRow>
+                              ))
+                            }
+                          </TableBody>
+                        </Table>
+                    </div>
+                      
+                      {/* Show coefficients of the best model */}
+                      <div className="mt-6">
+                        <h3 className="text-lg font-semibold">Коэффициенты лучшей модели</h3>
+                        {analysisResult.regression_analysis.models.length > 0 && (
+                          <>
+                            <p className="mb-2">
+                              <strong>Тип модели: </strong>
+                              {analysisResult.regression_analysis.models.sort((a: RegressionModel, b: RegressionModel) => b.r_squared - a.r_squared)[0].regression_type}
+                            </p>
+                     <Table>
+                      <TableHeader>
+                        <TableRow>
+                                  <TableHead>Переменная</TableHead>
+                                  <TableHead>Коэффициент</TableHead>
+                                  <TableHead>Стд. ошибка</TableHead>
+                                  {analysisResult.regression_analysis.models[0].regression_type === "Linear" && (
+                                    <>
+                                      <TableHead>T-статистика</TableHead>
+                                      <TableHead>P-значение</TableHead>
+                                    </>
+                                  )}
+                                  <TableHead>95% ДИ (нижн.)</TableHead>
+                                  <TableHead>95% ДИ (верхн.)</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                                {analysisResult.regression_analysis.models
+                                  .sort((a: RegressionModel, b: RegressionModel) => b.r_squared - a.r_squared)[0]
+                                  .coefficients?.map((coeff: RegressionCoefficient, index: number) => (
+                                    <TableRow key={`coef-${index}-${coeff.variable_name}`}>
+                                      <TableCell>{coeff.variable_name}</TableCell>
+                                      <TableCell>{formatNumber(coeff.coefficient)}</TableCell>
+                                      <TableCell>{formatNumber(coeff.std_error)}</TableCell>
+                                      {analysisResult.regression_analysis.models[0].regression_type === "Linear" && (
+                                        <>
+                                          <TableCell>{formatNumber(coeff.t_statistic)}</TableCell>
+                                          <TableCell>{formatNumber(coeff.p_value)}</TableCell>
+                                        </>
+                                      )}
+                                      <TableCell>{formatNumber(coeff.confidence_interval_lower)}</TableCell>
+                                      <TableCell>{formatNumber(coeff.confidence_interval_upper)}</TableCell>
+                          </TableRow>
+                        )) ?? (
+                          <TableRow>
+                                      <TableCell colSpan={7} className="text-center">Нет данных</TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              )}
+
+            </Tabs>
+          </CardContent>
+        </Card>
+      )}
+
     </div>
   )
 }

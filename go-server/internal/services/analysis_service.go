@@ -10,7 +10,8 @@ import (
 
 // AnalysisService определяет интерфейс для сервиса анализа данных.
 type AnalysisService interface {
-	PerformAnalysis(ctx context.Context, fileContent []byte, fileName string) (*generated.AnalysisResponse, error)
+	PerformAnalysis(ctx context.Context, fileContent []byte, fileName string, selectedAnalyses []string) (*generated.AnalyzeDataResponse, error)
+	GetFileColumns(ctx context.Context, fileContent []byte, fileName string) ([]string, error)
 }
 
 // analysisServiceImpl реализует AnalysisService.
@@ -31,8 +32,8 @@ func NewAnalysisService(client adapter.AnalysisClient) AnalysisService {
 }
 
 // PerformAnalysis выполняет анализ данных, делегируя вызов gRPC клиенту.
-func (s *analysisServiceImpl) PerformAnalysis(ctx context.Context, fileContent []byte, fileName string) (*generated.AnalysisResponse, error) {
-	log.Printf("Service: Performing analysis for file: %s", fileName)
+func (s *analysisServiceImpl) PerformAnalysis(ctx context.Context, fileContent []byte, fileName string, selectedAnalyses []string) (*generated.AnalyzeDataResponse, error) {
+	log.Printf("Service: Performing analysis for file: %s, selected analyses: %v", fileName, selectedAnalyses)
 
 	if s.grpcClient == nil {
 		log.Println("Error: gRPC client is not initialized in AnalysisService")
@@ -40,7 +41,7 @@ func (s *analysisServiceImpl) PerformAnalysis(ctx context.Context, fileContent [
 	}
 
 	// Просто вызываем метод нашего gRPC клиента
-	response, err := s.grpcClient.AnalyzeData(ctx, fileContent, fileName)
+	response, err := s.grpcClient.AnalyzeData(ctx, fileContent, fileName, selectedAnalyses)
 	if err != nil {
 		log.Printf("Service: Error calling gRPC client: %v", err)
 		// Здесь можно добавить логику обработки специфических ошибок от gRPC, если нужно
@@ -49,4 +50,24 @@ func (s *analysisServiceImpl) PerformAnalysis(ctx context.Context, fileContent [
 
 	log.Printf("Service: Analysis completed successfully for file: %s", fileName)
 	return response, nil
+}
+
+// GetFileColumns получает список столбцов из файла.
+func (s *analysisServiceImpl) GetFileColumns(ctx context.Context, fileContent []byte, fileName string) ([]string, error) {
+	log.Printf("Service: Getting columns for file: %s", fileName)
+
+	if s.grpcClient == nil {
+		log.Println("Error: gRPC client is not initialized in AnalysisService")
+		return nil, fmt.Errorf("internal server error: analysis client not available")
+	}
+
+	// Вызываем метод нашего gRPC клиента для получения столбцов
+	columns, err := s.grpcClient.GetFileColumns(ctx, fileContent, fileName)
+	if err != nil {
+		log.Printf("Service: Error getting columns from gRPC client: %v", err)
+		return nil, fmt.Errorf("failed to get file columns: %w", err)
+	}
+
+	log.Printf("Service: Successfully got %d columns for file: %s", len(columns), fileName)
+	return columns, nil
 }

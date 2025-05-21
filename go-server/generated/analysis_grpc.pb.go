@@ -26,7 +26,7 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type AnalysisServiceClient interface {
-	AnalyzeData(ctx context.Context, in *AnalysisRequest, opts ...grpc.CallOption) (*AnalysisResponse, error)
+	AnalyzeData(ctx context.Context, in *AnalysisRequest, opts ...grpc.CallOption) (*AnalyzeDataResponse, error)
 }
 
 type analysisServiceClient struct {
@@ -37,9 +37,9 @@ func NewAnalysisServiceClient(cc grpc.ClientConnInterface) AnalysisServiceClient
 	return &analysisServiceClient{cc}
 }
 
-func (c *analysisServiceClient) AnalyzeData(ctx context.Context, in *AnalysisRequest, opts ...grpc.CallOption) (*AnalysisResponse, error) {
+func (c *analysisServiceClient) AnalyzeData(ctx context.Context, in *AnalysisRequest, opts ...grpc.CallOption) (*AnalyzeDataResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AnalysisResponse)
+	out := new(AnalyzeDataResponse)
 	err := c.cc.Invoke(ctx, AnalysisService_AnalyzeData_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -51,7 +51,7 @@ func (c *analysisServiceClient) AnalyzeData(ctx context.Context, in *AnalysisReq
 // All implementations must embed UnimplementedAnalysisServiceServer
 // for forward compatibility.
 type AnalysisServiceServer interface {
-	AnalyzeData(context.Context, *AnalysisRequest) (*AnalysisResponse, error)
+	AnalyzeData(context.Context, *AnalysisRequest) (*AnalyzeDataResponse, error)
 	mustEmbedUnimplementedAnalysisServiceServer()
 }
 
@@ -62,7 +62,7 @@ type AnalysisServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedAnalysisServiceServer struct{}
 
-func (UnimplementedAnalysisServiceServer) AnalyzeData(context.Context, *AnalysisRequest) (*AnalysisResponse, error) {
+func (UnimplementedAnalysisServiceServer) AnalyzeData(context.Context, *AnalysisRequest) (*AnalyzeDataResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AnalyzeData not implemented")
 }
 func (UnimplementedAnalysisServiceServer) mustEmbedUnimplementedAnalysisServiceServer() {}

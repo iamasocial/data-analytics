@@ -37,7 +37,7 @@ class AnalysisServiceStub(object):
         self.AnalyzeData = channel.unary_unary(
                 '/analysis.AnalysisService/AnalyzeData',
                 request_serializer=analysis__pb2.AnalysisRequest.SerializeToString,
-                response_deserializer=analysis__pb2.AnalysisResponse.FromString,
+                response_deserializer=analysis__pb2.AnalyzeDataResponse.FromString,
                 _registered_method=True)
 
 
@@ -56,7 +56,7 @@ def add_AnalysisServiceServicer_to_server(servicer, server):
             'AnalyzeData': grpc.unary_unary_rpc_method_handler(
                     servicer.AnalyzeData,
                     request_deserializer=analysis__pb2.AnalysisRequest.FromString,
-                    response_serializer=analysis__pb2.AnalysisResponse.SerializeToString,
+                    response_serializer=analysis__pb2.AnalyzeDataResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -85,7 +85,7 @@ class AnalysisService(object):
             target,
             '/analysis.AnalysisService/AnalyzeData',
             analysis__pb2.AnalysisRequest.SerializeToString,
-            analysis__pb2.AnalysisResponse.FromString,
+            analysis__pb2.AnalyzeDataResponse.FromString,
             options,
             channel_credentials,
             insecure,

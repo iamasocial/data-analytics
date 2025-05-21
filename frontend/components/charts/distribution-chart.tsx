@@ -1,184 +1,124 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import * as d3 from "d3"
 
-// Имитация данных распределения
-const distributionData = [
-  {
-    name: "price",
-    values: Array.from({ length: 100 }, () => Math.random() * 100 + 50),
-  },
-  {
-    name: "quantity",
-    values: Array.from({ length: 100 }, () => Math.random() * 50 + 10),
-  },
-  {
-    name: "revenue",
-    values: Array.from({ length: 100 }, () => Math.random() * 1000 + 500),
-  },
-]
+interface HistogramData {
+  bins: number[]; // Bin edges (N+1)
+  frequencies: number[]; // Frequencies per bin (N)
+}
 
-export function DistributionChart() {
+interface DistributionChartProps {
+  data: HistogramData;
+  variableName: string;
+}
+
+// Updated component to accept props and draw a single histogram
+export function DistributionChart({ data, variableName }: DistributionChartProps) {
   const svgRef = useRef<SVGSVGElement>(null)
+  const [isMounted, setIsMounted] = useState(false); // State for client-side check
+
+  // Ensure component only runs client-side
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
-    if (!svgRef.current) return
+    // Wait until mounted and basic data/ref checks pass
+    if (!isMounted || !svgRef.current || !data || data.bins.length < 2 || data.frequencies.length === 0) return
 
-    // Очистка предыдущего графика
-    d3.select(svgRef.current).selectAll("*").remove()
+    // --- Data Preparation ---
+    // Ensure bins and frequencies match up (N+1 edges, N frequencies)
+    const bins = data.bins;
+    const frequencies = data.frequencies;
+    if (bins.length !== frequencies.length + 1) {
+      console.error("[DistributionChart] Histogram data mismatch: bins.length must be frequencies.length + 1");
+      return;
+    }
 
-    // Размеры и отступы
-    const margin = { top: 30, right: 30, bottom: 50, left: 60 }
-    const width = svgRef.current.clientWidth - margin.left - margin.right
-    const height = svgRef.current.clientHeight - margin.top - margin.bottom
+    // --- D3 Setup ---
+    d3.select(svgRef.current).selectAll("*").remove(); // Clear previous chart
 
-    // Создание SVG
+    const margin = { top: 30, right: 30, bottom: 50, left: 60 };
+    const containerWidth = svgRef.current.clientWidth;
+    const containerHeight = svgRef.current.clientHeight > 0 ? svgRef.current.clientHeight : 300;
+    if (containerWidth <= 0) {
+        console.warn("[DistributionChart] Container width is 0, skipping render.");
+        return;
+    } 
+
+    const width = containerWidth - margin.left - margin.right;
+    const height = containerHeight - margin.top - margin.bottom;
+    if (width <= 0 || height <= 0) {
+        console.warn("[DistributionChart] Calculated chart dimensions are non-positive, skipping render.");
+        return;
+    } 
+
     const svg = d3
       .select(svgRef.current)
-      .attr("width", width + margin.left + margin.right)
-      .attr("height", height + margin.top + margin.bottom)
+      .attr("width", containerWidth)
+      .attr("height", containerHeight)
       .append("g")
-      .attr("transform", `translate(${margin.left},${margin.top})`)
+      .attr("transform", `translate(${margin.left},${margin.top})`);
 
-    // Цвета для разных переменных
-    const colors = ["#4c51bf", "#38a169", "#e53e3e"]
+    // --- Scales ---
+    const xMin = bins[0];
+    const xMax = bins[bins.length - 1];
+    const yMax = d3.max(frequencies) || 1;
 
-    // Создание графиков для каждой переменной
-    distributionData.forEach((data, i) => {
-      // Масштабы
-      const x = d3
-        .scaleLinear()
-        .domain([d3.min(data.values) || 0, d3.max(data.values) || 100])
-        .range([0, width])
+    const xScale = d3.scaleLinear().domain([xMin, xMax]).range([0, width]);
+    const yScale = d3.scaleLinear().domain([0, yMax]).nice().range([height, 0]);
 
-      // Создание гистограммы
-      const histogram = d3
-        .histogram()
-        .value((d) => d)
-        .domain(x.domain() as [number, number])
-        .thresholds(x.ticks(20))
+    // --- Axes ---
+    svg.append("g")
+       .attr("transform", `translate(0,${height})`)
+       .call(d3.axisBottom(xScale).ticks(Math.min(10, bins.length)).tickSizeOuter(0));
 
-      const bins = histogram(data.values)
+    svg.append("g")
+       .call(d3.axisLeft(yScale));
 
-      // Масштаб Y
-      const y = d3
-        .scaleLinear()
-        .range([height, 0])
-        .domain([0, d3.max(bins, (d) => d.length) || 10])
+    // Axis Labels
+    svg.append("text")
+       .attr("text-anchor", "middle")
+       .attr("x", width / 2)
+       .attr("y", height + margin.bottom - 10)
+       .text(variableName);
 
-      // Добавление осей
-      if (i === 0) {
-        svg.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(x))
+    svg.append("text")
+       .attr("text-anchor", "middle")
+       .attr("transform", "rotate(-90)")
+       .attr("y", -margin.left + 15)
+       .attr("x", -height / 2)
+       .text("Частота");
+       
+    // --- Draw Bars ---
+    // Create data pairs for bars: {x0, x1, frequency}
+    const barData = frequencies.map((freq, i) => ({
+        x0: bins[i],
+        x1: bins[i+1],
+        frequency: freq
+    }));
 
-        svg.append("g").call(d3.axisLeft(y))
+    svg.selectAll("rect")
+       .data(barData)
+       .enter()
+       .append("rect")
+       .attr("x", d => xScale(d.x0))
+       .attr("width", d => Math.max(0, xScale(d.x1) - xScale(d.x0) - 1)) // Add padding between bars
+       .attr("y", d => yScale(d.frequency))
+       .attr("height", d => height - yScale(d.frequency))
+       .style("fill", "#4c51bf"); // Use a single color
 
-        // Подписи осей
-        svg
-          .append("text")
-          .attr("text-anchor", "middle")
-          .attr("x", width / 2)
-          .attr("y", height + margin.bottom - 10)
-          .text("Значение")
+  }, [data, variableName, isMounted]); // Add isMounted to dependency array
 
-        svg
-          .append("text")
-          .attr("text-anchor", "middle")
-          .attr("transform", "rotate(-90)")
-          .attr("y", -margin.left + 15)
-          .attr("x", -height / 2)
-          .text("Частота")
-      }
-
-      // Добавление гистограммы
-      svg
-        .selectAll(`.bar-${i}`)
-        .data(bins)
-        .enter()
-        .append("rect")
-        .attr("class", `bar-${i}`)
-        .attr("x", (d) => x(d.x0 || 0))
-        .attr("width", (d) => Math.max(0, x(d.x1 || 0) - x(d.x0 || 0) - 1))
-        .attr("y", (d) => y(d.length))
-        .attr("height", (d) => height - y(d.length))
-        .style("fill", colors[i])
-        .style("opacity", 0.3)
-
-      // Добавление линии плотности
-      const kde = kernelDensityEstimator(kernelEpanechnikov(7), x.ticks(100))
-      const density = kde(data.values)
-
-      // Масштабирование плотности
-      const maxDensity = d3.max(density, (d) => d[1]) || 1
-      const densityScale = d3
-        .scaleLinear()
-        .domain([0, maxDensity])
-        .range([0, d3.max(bins, (d) => d.length) || 10])
-
-      // Добавление линии
-      svg
-        .append("path")
-        .datum(density as [number, number][])
-        .attr("fill", "none")
-        .attr("stroke", colors[i])
-        .attr("stroke-width", 2)
-        .attr(
-          "d",
-          d3
-            .line()
-            .curve(d3.curveBasis)
-            .x((d) => x(d[0]))
-            .y((d) => y(densityScale(d[1]))),
-        )
-    })
-
-    // Добавление легенды
-    const legend = svg.append("g").attr("transform", `translate(${width - 100}, 0)`)
-
-    distributionData.forEach((data, i) => {
-      legend
-        .append("rect")
-        .attr("x", 0)
-        .attr("y", i * 20)
-        .attr("width", 15)
-        .attr("height", 15)
-        .style("fill", colors[i])
-
-      legend
-        .append("text")
-        .attr("x", 20)
-        .attr("y", i * 20 + 12)
-        .text(data.name)
-        .style("font-size", "12px")
-    })
-
-    // Функции для расчета плотности
-    function kernelDensityEstimator(kernel: (v: number) => number, X: number[]) {
-      return (V: number[]) => X.map((x) => [x, d3.mean(V, (v) => kernel(x - v)) || 0])
-    }
-
-    function kernelEpanechnikov(k: number) {
-      return (v: number) => (Math.abs((v /= k)) <= 1 ? (0.75 * (1 - v * v)) / k : 0)
-    }
-
-    // Обработка изменения размера окна
-    const handleResize = () => {
-      if (!svgRef.current) return
-
-      // Обновление размеров и перерисовка графика
-      // ...
-    }
-
-    window.addEventListener("resize", handleResize)
-
-    return () => {
-      window.removeEventListener("resize", handleResize)
-    }
-  }, [])
+  // Conditionally render svg only when mounted
+  if (!isMounted) {
+    return <div className="w-full h-64 flex items-center justify-center text-gray-500">Загрузка графика...</div>; // Placeholder during mount
+  }
 
   return (
-    <div className="w-full h-full">
+    <div className="w-full h-64"> {/* Set a fixed height or make it responsive */}
       <svg ref={svgRef} className="w-full h-full" />
     </div>
-  )
+  );
 }

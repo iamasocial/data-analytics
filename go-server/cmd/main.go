@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	defaultPythonServerAddress = "localhost:50051" // Адрес Python gRPC сервера по умолчанию
-	defaultGoServerPort        = "8080"            // Порт Go HTTP сервера по умолчанию
+	defaultPythonServerAddress = "localhost:9000" // Адрес Python gRPC сервера по умолчанию (изменено с 50051 на 9000)
+	defaultGoServerPort        = "8080"           // Порт Go HTTP сервера по умолчанию
 	// ВАЖНО: Укажите правильный путь к директории сборки вашего React приложения
 	// staticFilesPath = "./frontend/out"
 )

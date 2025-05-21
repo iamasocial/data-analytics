@@ -5,32 +5,45 @@ package analysis;
 option go_package = "./go-server/generated";
 
 service AnalysisService {
-    rpc AnalyzeData(AnalysisRequest) returns (AnalysisResponse);
+    rpc AnalyzeData(AnalysisRequest) returns (AnalyzeDataResponse);
 }
 
 message AnalysisRequest {
     bytes file_content = 1;
     string file_name = 2;
+    repeated string selected_analyses = 3;
 }
 
-message AnalysisResponse {
+// Основной ответ анализа данных со структурированными подразделами
+message AnalyzeDataResponse {
+    DescriptiveStatisticsResponse descriptive_stats = 1;
+    NormalityTestsResponse normality_tests = 2;
+    RegressionAnalysisResponse regression_analysis = 3;
+    repeated string processing_log = 4;
+    ErrorDetails error = 5;
+}
+
+// Ошибка, которая может возникнуть при анализе данных
+message ErrorDetails {
+    string code = 1;          // Код ошибки 
+    string message = 2;       // Сообщение об ошибке
+    repeated string details = 3; // Дополнительные детали (например, стек вызовов)
+}
+
+// ------------------ Описательные статистики ------------------
+message DescriptiveStatisticsResponse {
     repeated DescriptiveStatistics descriptives = 1;
-    repeated NormalityTestResult normality_tests = 2;
-    repeated ConfidenceInterval confidence_intervals = 3;
-    repeated HypothesisTestResult hypothesis_tests = 4;
-    repeated PearsonChiSquareTestResult pearson_chi_square_results = 5;
-    CorrelationResult correlation = 6;
-    repeated RegressionResult regressions = 7;
-    repeated BinomialAnalysisResult binomial_analysis_results = 8;
-    repeated string processing_log = 9;
+    repeated HistogramData histograms = 2;
+    repeated ConfidenceInterval confidence_intervals = 4;
 }
 
+// Описательные статистики для одной переменной
 message DescriptiveStatistics {
     string variable_name = 1;
-    int64 count = 2;
+    string count = 2;         // Строка вместо int64 для совместимости
     double mean = 3;
     double median = 4;
-    repeated double mode = 5;
+    repeated string mode = 5; // Строки для совместимости с нечисловыми модами
     double variance = 6;
     double std_dev = 7;
     double variation_coefficient = 8;
@@ -40,89 +53,80 @@ message DescriptiveStatistics {
     double max_value = 12;
 }
 
-message NormalityTestResult {
-    string variable_name = 1;
-    string test_name = 2;
-    double statistic = 3;
-    double p_value = 4;
-    string conclusion = 5;
+// Данные гистограммы для построения графика
+message HistogramData {
+    string column_name = 1;   // Изменено с variable_name
+    repeated double bins = 2;   // Границы бинов (N+1 для N бинов)
+    repeated int32 frequencies = 3; // Частоты в каждом бине
 }
 
+// Доверительные интервалы
 message ConfidenceInterval {
-    string variable_name = 1;
-    string parameter_name = 2;
+    string column_name = 1;   // Изменено с variable_name
+    double confidence_level = 2;  // например, 0.95 для 95%
     double lower_bound = 3;
     double upper_bound = 4;
-    double confidence_level = 5;
+    double mean = 5;           // Добавлено для CI
+    double standard_error = 6; // Добавлено для CI
 }
 
-message HypothesisTestResult {
-    string test_name = 1;
-    string description = 2;
+// ------------------ Тесты на нормальность ------------------
+message NormalityTestsResponse {
+    repeated NormalityTestResult shapiro_wilk_results = 1;
+    repeated PearsonChiSquareResult chi_square_results = 2;
+}
+
+// Результаты теста на нормальность (например, Shapiro-Wilk)
+message NormalityTestResult {
+    string column_name = 1;   // Изменено с variable_name
+    string test_name = 2;     // например, "Shapiro-Wilk"
     double statistic = 3;
     double p_value = 4;
-    string conclusion = 5;
+    bool is_normal = 5;       // Новое поле (вместо conclusion)
 }
 
-message PearsonChiSquareTestResult {
-    string variable_name = 1;
+// Результаты теста хи-квадрат на соответствие распределению
+message PearsonChiSquareResult {
+    string column_name = 1;   // Изменено с variable_name
     double statistic = 2;
-    int32 degrees_of_freedom = 3;
-    double p_value = 4;
-    string conclusion = 5;
-    string test_name = 6;
-    string distribution = 7;
+    double p_value = 3;
+    int32 degrees_of_freedom = 4;
+    int32 intervals = 5;      // Добавлено: количество интервалов
+    bool is_normal = 6;       // Добавлено: вывод теста
 }
 
-message CorrelationResult {
-    message PearsonCorrelation {
-        string variable1 = 1;
-        string variable2 = 2;
-        double coefficient = 3;
-        double p_value = 4;
-    }
-    message SpearmanCorrelation {
-        string variable1 = 1;
-        string variable2 = 2;
-        double coefficient = 3;
-        double p_value = 4;
-    }
-
-    repeated PearsonCorrelation pearson = 1;
-    repeated SpearmanCorrelation spearman = 2;
+// ------------------ Регрессионный анализ ------------------
+message RegressionAnalysisResponse {
+    string dependent_variable = 1;
+    repeated string independent_variables = 2;
+    repeated DataPoint data_points = 3; // Точки данных для построения графика
+    repeated RegressionModel models = 4; // Несколько моделей регрессии
 }
 
-message RegressionResult {
-    string model_type = 1;
-    string dependent_variable = 2;
-    repeated string independent_variables = 3;
-
-    double r_squared = 4;
-    double adjusted_r_squared = 5;
-    double f_statistic = 6;
-    double f_p_value = 7;
-
-    message Coefficient {
-        string variable_name = 1;
-        double estimate = 2;
-        double std_error = 3;
-        double t_statistic = 4;
-        double p_value = 5;
-    }
-    repeated Coefficient coefficients = 8;
+// Модель регрессии
+message RegressionModel {
+    string regression_type = 1;  // например, "Linear", "Power", "Logarithmic", etc.
+    double r_squared = 2;
+    double adjusted_r_squared = 3;
+    double f_statistic = 4;
+    double prob_f_statistic = 5;
+    double sse = 6;  // Sum of Squared Errors
+    repeated RegressionCoefficient coefficients = 7;
 }
 
-message BinomialAnalysisResult {
+// Коэффициент регрессии
+message RegressionCoefficient {
     string variable_name = 1;
-    int64 total_experiments = 2;
-    int64 inferred_n = 3;
-    int64 total_successes = 4;
-    double estimated_prob = 5;
-    double ci_lower = 6;
-    double ci_upper = 7;
-    double confidence_level = 8;
-    double gof_statistic = 9;
-    double gof_p_value = 10;
-    string gof_conclusion = 11;
-    bool gof_warning = 12;
+    double coefficient = 2;
+    double std_error = 3;    // Изменено с standard_error
+    double t_statistic = 4;
+    double p_value = 5;
+    double confidence_interval_lower = 6; // Добавлено для CI коэффициентов
+    double confidence_interval_upper = 7; // Добавлено для CI коэффициентов
+}
+
+// Точка данных для графика регрессии
+message DataPoint {
+    double x = 1;
+    double y = 2;
 }
