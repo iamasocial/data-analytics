@@ -23,10 +23,12 @@ interface RegressionChartProps {
   dependentVar: string;
   independentVar: string;
   height?: number; // Optional height prop
+  globalYDomain?: [number, number]; // For shared Y-axis scale
 }
 
 // Function to calculate Y values based on regression type and coefficients
-function calculateY(x: number, modelType: string, coefficients: {variable_name: string, coefficient: number}[]): number {
+// Exporting for use in UploadPage to calculate global Y scale
+export function calculateY(x: number, modelType: string, coefficients: {variable_name: string, coefficient: number}[]): number {
   // Найдем коэффициенты в зависимости от имен
   const intercept = coefficients.find((c) => c.variable_name === "const" || c.variable_name === "intercept")?.coefficient || 0;
   
@@ -61,23 +63,66 @@ function calculateY(x: number, modelType: string, coefficients: {variable_name: 
       // 'intercept' здесь может быть нерелевантен, если он ищет 'const'.
       return a * x * x + b * x + c_quad;
     }
-    case "Logarithmic":
-      // Защита от логарифма отрицательного числа
-      return intercept + slope * (x > 0 ? Math.log(x) : 0);
+    case "Logarithmic": {
+      const coeff_a = coefficients.find(c => c.variable_name === "a")?.coefficient;
+      const coeff_b = coefficients.find(c => c.variable_name === "b")?.coefficient;
+
+      if (coeff_a === undefined || coeff_b === undefined) {
+        console.warn(`Logarithmic regression: coefficients 'a' (${coeff_a}) or 'b' (${coeff_b}) not found. Coeffs:`, coefficients);
+        return NaN; // Return NaN if coefficients are missing, to filter out later
+      }
+      // y = a + b * ln(x)
+      if (x <= 0) {
+        // Python backend for log_func uses np.maximum(x, 1e-10).
+        // Math.log(0) is -Infinity. Math.log(negative) is NaN.
+        // To align with backend's avoidance of true zero/negative, we can return NaN or a calculated value for small x.
+        // For simplicity and to allow filtering of invalid points, returning NaN is safer here.
+        return NaN; 
+      }
+      return coeff_a + coeff_b * Math.log(x);
+    }
     case "Exponential":
       // y = a * e^(b*x)
       // В этом случае intercept это ln(a), поэтому a = e^intercept
       return Math.exp(intercept) * Math.exp(slope * x);
-    case "Power":
+    case "Power": {
+      const coeff_a = coefficients.find(c => c.variable_name === "a")?.coefficient;
+      const coeff_b = coefficients.find(c => c.variable_name === "b")?.coefficient;
+
+      if (coeff_a === undefined || coeff_b === undefined) {
+        console.warn(`Power regression: coefficients 'a' (${coeff_a}) or 'b' (${coeff_b}) not found or invalid. Coefficients available:`, coefficients);
+        return 0; // Fallback or error handling
+      }
       // y = a * x^b
-      // В этом случае также intercept это ln(a)
-      return x > 0 ? Math.exp(intercept) * Math.pow(x, slope) : 0;
+      // Handle x <= 0 for Math.pow if b is not an integer or x is negative.
+      // Python backend's power_func uses np.maximum(x, 1e-10) for x, so x passed here should generally be >0 from data.
+      if (x <= 0) {
+        // For x=0, if b>0, result is 0. If b<0, result is undefined. If b=0, result is a.
+        // Safest to return 0 if x is not positive, aligning with common interpretations or returning NaN.
+        return 0;
+      }
+      return coeff_a * Math.pow(x, coeff_b);
+    }
+    case "Trigonometric": {
+      const coeff_a = coefficients.find(c => c.variable_name === "a")?.coefficient ?? 0;
+      const coeff_b = coefficients.find(c => c.variable_name === "b")?.coefficient ?? 0;
+      const coeff_c = coefficients.find(c => c.variable_name === "c")?.coefficient ?? 0;
+      const coeff_d = coefficients.find(c => c.variable_name === "d")?.coefficient ?? 0;
+      return coeff_a * Math.sin(coeff_b * x + coeff_c) + coeff_d;
+    }
+    case "Sigmoid": {
+      const coeff_a = coefficients.find(c => c.variable_name === "a")?.coefficient ?? 0;
+      const coeff_b = coefficients.find(c => c.variable_name === "b")?.coefficient ?? 0;
+      const coeff_c = coefficients.find(c => c.variable_name === "c")?.coefficient ?? 0;
+      const exponent = -coeff_a * (x - coeff_b);
+      return coeff_c / (1 + Math.exp(exponent));
+    }
     default:
       return intercept + slope * x; // Default to linear as fallback
   }
 }
 
-export function RegressionChart({ data, models, dependentVar, independentVar, height = 600 }: RegressionChartProps) {
+export function RegressionChart({ data, models, dependentVar, independentVar, height = 600, globalYDomain }: RegressionChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isMounted, setIsMounted] = useState(false);
@@ -131,43 +176,48 @@ export function RegressionChart({ data, models, dependentVar, independentVar, he
       const xPadding = (xMax - xMin) * 0.05;
       const yPadding = (yMax - yMin) * 0.05;
   
-      // Pre-calculate regression y-values to determine proper y-axis scale
-      const xPointsForRange = [xMin - xPadding, xMin, (xMin + xMax) / 2, xMax, xMax + xPadding];
-      let allYValues = [...data.map(d => d.y)];
-      
-      // Calculate Y values for all regression models at key X points
-      models.forEach(model => {
-        const modelYs = xPointsForRange.map(x => {
-          const y = calculateY(x, model.type, model.coefficients);
-          return isNaN(y) || !isFinite(y) ? null : y;
-        }).filter((y): y is number => y !== null);
-        allYValues = [...allYValues, ...modelYs];
-      });
-      
-      // Determine true y-axis range including regression lines
-      const actualYMin = Math.min(...allYValues);
-      const actualYMax = Math.max(...allYValues);
-      
-      // Use a wider range if regression values extend beyond data points
-      const finalYMin = Math.min(yMin, actualYMin);
-      const finalYMax = Math.max(yMax, actualYMax);
-      
-      // Add padding to Y domain
-      const finalYPadding = (finalYMax - finalYMin) * 0.1;
-      
-      console.log("Y-axis range:", {
-        dataRange: [yMin, yMax],
-        withRegression: [actualYMin, actualYMax],
-        final: [finalYMin - finalYPadding, finalYMax + finalYPadding]
-      });
+      const yScale = d3.scaleLinear();
+
+      if (globalYDomain && globalYDomain.length === 2) {
+        yScale.domain(globalYDomain).range([graphHeight, 0]);
+        console.log("[RegressionChart] Using globalYDomain:", globalYDomain);
+      } else {
+        // Fallback to existing dynamic Y scale calculation if globalYDomain is not provided
+        // Pre-calculate regression y-values to determine proper y-axis scale
+        const xPointsForRange = [xMin - xPadding, xMin, (xMin + xMax) / 2, xMax, xMax + xPadding];
+        let allYValues = [...data.map(d => d.y)];
+        
+        // Calculate Y values for all regression models at key X points (for this specific chart's models)
+        models.forEach(model => {
+          const modelYs = xPointsForRange.map(x => {
+            const y = calculateY(x, model.type, model.coefficients);
+            return isNaN(y) || !isFinite(y) ? null : y;
+          }).filter((y): y is number => y !== null);
+          allYValues = [...allYValues, ...modelYs];
+        });
+        
+        // Determine true y-axis range including regression lines
+        const actualYMin = Math.min(...allYValues);
+        const actualYMax = Math.max(...allYValues);
+        
+        // Use a wider range if regression values extend beyond data points
+        const finalYMin = Math.min(yMin, actualYMin);
+        const finalYMax = Math.max(yMax, actualYMax);
+        
+        // Add padding to Y domain
+        const finalYPadding = (finalYMax - finalYMin) * 0.1;
+        
+        console.log("[RegressionChart] Dynamically calculated Y-axis range:", {
+          dataRange: [yMin, yMax],
+          withRegression: [actualYMin, actualYMax],
+          final: [finalYMin - finalYPadding, finalYMax + finalYPadding]
+        });
+        yScale.domain([finalYMin - finalYPadding, finalYMax + finalYPadding]).range([graphHeight, 0]);
+      }
   
       const xScale = d3.scaleLinear()
         .domain([xMin - xPadding, xMax + xPadding])
         .range([0, width]);
-      
-      const yScale = d3.scaleLinear()
-        .domain([finalYMin - finalYPadding, finalYMax + finalYPadding])
-        .range([graphHeight, 0]);
   
       // Draw axes
       svg.append("g")
@@ -243,23 +293,23 @@ export function RegressionChart({ data, models, dependentVar, independentVar, he
         // Если у нас есть значения, которые слишком сильно выходят за пределы графика,
         // мы ограничиваем их для лучшего отображения
         const yExtent = d3.extent(lineData, d => d.y) as [number, number];
-        const yDataRange = yMax - yMin;
+        const currentYScaleDomain = yScale.domain(); // Получаем текущий домен шкалы Y
         
         // Проверяем, есть ли экстремальные значения, выходящие далеко за пределы графика
         const hasExtremeValues = 
-          yExtent[0] < yMin - yDataRange * 5 || 
-          yExtent[1] > yMax + yDataRange * 5;
+          yExtent[0] < currentYScaleDomain[0] - (currentYScaleDomain[1] - currentYScaleDomain[0]) * 0.1 || 
+          yExtent[1] > currentYScaleDomain[1] + (currentYScaleDomain[1] - currentYScaleDomain[0]) * 0.1;
         
         console.log(`Regression ${modelType} - Y extent:`, yExtent, 
-          `Data range: ${yMin}-${yMax}`, 
+          `Y Scale Domain: ${currentYScaleDomain[0]}-${currentYScaleDomain[1]}`, 
           `Has extreme values: ${hasExtremeValues}`);
         
-        const limitedLineData = hasExtremeValues 
-          ? lineData.map(d => ({
-              x: d.x,
-              y: Math.max(yMin - yDataRange, Math.min(d.y, yMax + yDataRange))
-            }))
-          : lineData;
+        // Ограничиваем значения линии регрессии, чтобы они не выходили слишком далеко за пределы видимой области графика
+        // Используем currentYScaleDomain для определения границ
+        const limitedLineData = lineData.map(d => ({
+          x: d.x,
+          y: Math.max(currentYScaleDomain[0], Math.min(d.y, currentYScaleDomain[1]))
+        }));
         
         // Draw line
         const line = d3.line<{x: number, y: number}>()
@@ -301,7 +351,7 @@ export function RegressionChart({ data, models, dependentVar, independentVar, he
     return () => {
       window.removeEventListener('resize', handleResize);
     };
-  }, [data, models, dependentVar, independentVar, isMounted, height]);
+  }, [data, models, dependentVar, independentVar, isMounted, height, globalYDomain]);
 
   return (
     <div ref={containerRef} style={{ width: "100%", height: "100%" }}>

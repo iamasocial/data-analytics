@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DistributionChart } from "@/components/charts/distribution-chart"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
-import { RegressionChart } from "@/components/charts/regression-chart"
+import { RegressionChart, calculateY } from "@/components/charts/regression-chart"
 
 // Helper function to format numbers, handling potential non-numeric modes
 function formatNumber(value: number | string | null | undefined, decimals = 3): string {
@@ -50,11 +50,18 @@ interface DataPoint {
   y: number;
 }
 
-interface RegressionAnalysisResponse {
+interface RegressionAnalysisResult {
   dependent_variable: string;
   independent_variables: string[];
   data_points: DataPoint[];
   models: RegressionModel[];
+}
+
+interface AnalysisResultType { // More specific type for analysisResult state
+  descriptive_stats?: any; // Replace any with more specific types if available
+  normality_tests?: any;   // Replace any with more specific types if available
+  regression_analysis?: RegressionAnalysisResult;
+  // Add other potential top-level keys from your API response here
 }
 
 export default function UploadPage() {
@@ -65,7 +72,7 @@ export default function UploadPage() {
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "success" | "error">("idle")
-  const [analysisResult, setAnalysisResult] = useState<any | null>(null)
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResultType | null>(null)
   const [selectedAnalysesOptions, setSelectedAnalysesOptions] = useState({
     descriptive_stats: true,
     normality_test: true,
@@ -75,6 +82,7 @@ export default function UploadPage() {
   const [dependentVariable, setDependentVariable] = useState<string>("");
   const [independentVariable, setIndependentVariable] = useState<string>("");
   const [selectedRegressionType, setSelectedRegressionType] = useState<string>("");
+  const [globalYDomain, setGlobalYDomain] = useState<[number, number] | undefined>(undefined);
 
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
@@ -318,6 +326,48 @@ export default function UploadPage() {
        }
     }
   }
+
+  // Effect to calculate global Y domain for regression charts
+  useEffect(() => {
+    if (analysisResult?.regression_analysis?.models && analysisResult.regression_analysis.data_points?.length > 0) {
+      const { models, data_points } = analysisResult.regression_analysis;
+      let allYValues: number[] = data_points.map((dp: DataPoint) => dp.y);
+      
+      const xData = data_points.map((dp: DataPoint) => dp.x);
+      const xMin = Math.min(...xData);
+      const xMax = Math.max(...xData);
+      const xRange = xMax - xMin;
+      // Generate a set of X points for calculating regression lines' Y values
+      // More points can make the min/max Y more accurate but increase computation
+      const numXPointsForGlobalScale = 100; 
+      const xPointsForScale = Array.from({ length: numXPointsForGlobalScale }, (_, i) => xMin + (i / (numXPointsForGlobalScale -1)) * xRange);
+      if (xRange === 0 && xPointsForScale.length === 0) { // Handle case with single X point
+        xPointsForScale.push(xMin);
+      }
+
+
+      models.forEach((model: RegressionModel) => {
+        const modelYs = xPointsForScale.map(xVal => {
+          const y = calculateY(xVal, model.regression_type, model.coefficients);
+          return isNaN(y) || !isFinite(y) ? null : y;
+        }).filter((y): y is number => y !== null);
+        allYValues = [...allYValues, ...modelYs];
+      });
+
+      if (allYValues.length > 0) {
+        const yMin = Math.min(...allYValues);
+        const yMax = Math.max(...allYValues);
+        const yPadding = (yMax - yMin) * 0.1 || 0.1; // Add padding, handle yMax === yMin
+
+        setGlobalYDomain([yMin - yPadding, yMax + yPadding]);
+        console.log("Calculated globalYDomain:", [yMin - yPadding, yMax + yPadding]);
+      } else {
+        setGlobalYDomain(undefined); // Reset if no valid Y values
+      }
+    } else {
+      setGlobalYDomain(undefined); // Reset if no analysis result or models
+    }
+  }, [analysisResult]);
 
   return (
     <div className="space-y-6">
@@ -730,282 +780,252 @@ export default function UploadPage() {
                     <CardTitle>Регрессионный Анализ</CardTitle>
                   </CardHeader>
                   <CardContent className="p-0 md:p-1">
-                    <div className="space-y-6">
-                      {/* Debug info for regression models */}
-                      {process.env.NODE_ENV !== "production" && (
-                        <div className="bg-gray-100 p-2 rounded-md mb-4 text-sm">
-                          <p className="font-bold">Debug - Regression Models:</p>
-                          <pre className="overflow-x-auto whitespace-pre-wrap">
-                            {JSON.stringify(analysisResult.regression_analysis.models.map((m: RegressionModel) => ({
-                              type: m.regression_type,
-                              r2: m.r_squared,
-                              coefs: m.coefficients.map((c: RegressionCoefficient) => `${c.variable_name}: ${c.coefficient}`)
-                            })), null, 2)}
-                          </pre>
-                        </div>
-                      )}
-                      
-                      {/* Regression Chart */}
-                      {analysisResult.regression_analysis.data_points && analysisResult.regression_analysis.data_points.length > 0 && (
-                        <div className="mb-6 w-full">
-                          <h3 className="text-lg font-semibold mb-4">Графики регрессии</h3>
-                          
-                          {/* Regression Type Selector */}
-                          <div className="mb-4">
-                            <div className="flex flex-wrap gap-2">
-                              {(() => {
-                                // Сортируем модели: линейная первая, потом по убыванию R²
-                                const sortedModels = [...analysisResult.regression_analysis.models].sort((a, b) => {
-                                  if (a.regression_type === "Linear") return -1;
-                                  if (b.regression_type === "Linear") return 1;
-                                  return b.r_squared - a.r_squared;
-                                });
-                                
-                                // Инициализируем тип регрессии, если он еще не выбран
-                                if (!selectedRegressionType && sortedModels.length > 0) {
-                                  // Ищем линейную регрессию или берем первую модель
-                                  const defaultType = sortedModels.find(m => m.regression_type === "Linear")?.regression_type || 
-                                                    sortedModels[0]?.regression_type;
-                                  
-                                  // Устанавливаем выбранный тип регрессии (с задержкой через setTimeout,
-                                  // чтобы избежать ошибки обновления состояния во время рендеринга)
-                                  setTimeout(() => {
-                                    setSelectedRegressionType(defaultType);
-                                  }, 0);
-                                  
-                                  // В первый раз показываем модель по умолчанию
-                                  return (
-                                    <>
-                                      {sortedModels.map(model => (
-                                        <Button
-                                          key={`btn-${model.regression_type}`}
-                                          variant={model.regression_type === defaultType ? "default" : "outline"}
-                                          size="sm"
-                                          onClick={() => setSelectedRegressionType(model.regression_type)}
-                                        >
-                                          {model.regression_type} (R² = {formatNumber(model.r_squared)})
-                                        </Button>
-                                      ))}
-                                      
-                                      {/* Показываем модель по умолчанию */}
-                                      {sortedModels
-                                        .filter(model => model.regression_type === defaultType)
-                                        .map((model, idx) => (
-                                          <div key={`regression-chart-${idx}`} className="w-full border rounded-lg p-2 bg-white shadow-sm">
-                                            <h4 className="text-lg font-medium mb-2 text-center">
-                                              {model.regression_type} (R² = {formatNumber(model.r_squared)})
-                                            </h4>
-                                            
-                                            {/* Информация о коэффициентах в читаемом формате */}
-                                            <div className="bg-blue-50 p-3 mb-2 rounded-md">
-                                              <p className="font-medium text-blue-800">Коэффициенты:</p>
-                                              <div className="mt-1">
-                                                {model.coefficients.map((c: RegressionCoefficient, i: number) => (
-                                                  <span key={`coef-${i}`} className="mr-4">
-                                                    {c.variable_name === "const" ? "Свободный член" : c.variable_name} = {formatNumber(c.coefficient)}
-                                                  </span>
-                                                ))}
-                                              </div>
-                    </div>
+                    {(() => { // IIFE to ensure regressionAnalysis is defined in this scope
+                      const regressionAnalysis = analysisResult.regression_analysis;
+                      if (!regressionAnalysis) return null; // Should not happen due to outer check, but good for TS
 
-                                            {/* Контейнер для графика на всю доступную ширину */}
-                                            <div className="w-full" style={{ minHeight: '650px', maxWidth: '100%' }}>
-                                              <RegressionChart 
-                                                data={analysisResult.regression_analysis.data_points}
-                                                models={[{
-                                                  type: model.regression_type,
-                                                  coefficients: model.coefficients,
-                                                  r_squared: model.r_squared
-                                                }]}
-                                                dependentVar={analysisResult.regression_analysis.dependent_variable}
-                                                independentVar={analysisResult.regression_analysis.independent_variables[0]}
-                                                height={700}
-                                              />
-                              </div>
-                                          </div>
-                                        ))
-                                      }
-                                    </>
-                                  );
-                                }
-                                
-                                // Отображение для последующих рендеров когда тип уже выбран
-                                return (
-                                  <>
-                                    {sortedModels.map(model => (
-                                      <Button
-                                        key={`btn-${model.regression_type}`}
-                                        variant={model.regression_type === selectedRegressionType ? "default" : "outline"}
-                                        size="sm"
-                                        onClick={() => setSelectedRegressionType(model.regression_type)}
-                                      >
-                                        {model.regression_type} (R² = {formatNumber(model.r_squared)})
-                                      </Button>
-                                    ))}
-                                    
-                                    {/* Отображаем только выбранную регрессию */}
-                                    {sortedModels
-                                      .filter(model => model.regression_type === selectedRegressionType)
-                                      .map((model, idx) => (
-                                        <div key={`regression-chart-${idx}`} className="w-full border rounded-lg p-2 bg-white shadow-sm">
-                                          <h4 className="text-lg font-medium mb-2 text-center">
-                                            {model.regression_type} (R² = {formatNumber(model.r_squared)})
-                                          </h4>
-                                          
-                                          {/* Информация о коэффициентах в читаемом формате */}
-                                          <div className="bg-blue-50 p-3 mb-2 rounded-md">
-                                            <p className="font-medium text-blue-800">Коэффициенты:</p>
-                                            <div className="mt-1">
-                                              {model.coefficients.map((c: RegressionCoefficient, i: number) => (
-                                                <span key={`coef-${i}`} className="mr-4">
-                                                  {c.variable_name === "const" ? "Свободный член" : c.variable_name} = {formatNumber(c.coefficient)}
-                                                </span>
-                                              ))}
-                                            </div>
-                                          </div>
-                                          
-                                          {/* Контейнер для графика на всю доступную ширину */}
-                                          <div className="w-full" style={{ minHeight: '650px', maxWidth: '100%' }}>
-                                            <RegressionChart 
-                                              data={analysisResult.regression_analysis.data_points}
-                                              models={[{
-                                                type: model.regression_type,
-                                                coefficients: model.coefficients,
-                                                r_squared: model.r_squared
-                                              }]}
-                                              dependentVar={analysisResult.regression_analysis.dependent_variable}
-                                              independentVar={analysisResult.regression_analysis.independent_variables[0]}
-                                              height={700}
-                                            />
-                                          </div>
-                                        </div>
-                                      ))
-                                    }
-                                  </>
-                                );
-                              })()}
+                      return (
+                        <div className="space-y-6">
+                          {/* Debug info for regression models */}
+                          {process.env.NODE_ENV !== "production" && (
+                            <div className="bg-gray-100 p-2 rounded-md mb-4 text-sm">
+                              <p className="font-bold">Debug - Regression Models:</p>
+                              <pre className="overflow-x-auto whitespace-pre-wrap">
+                                {JSON.stringify(regressionAnalysis.models.map((m: RegressionModel) => ({
+                                  type: m.regression_type,
+                                  r2: m.r_squared,
+                                  coefs: m.coefficients.map((c: RegressionCoefficient) => `${c.variable_name}: ${c.coefficient}`)
+                                })), null, 2)}
+                              </pre>
                             </div>
-                        </div>
-                      </div>
-                    )}
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                     <div>
-                          <p><strong>Зависимая переменная:</strong> {analysisResult.regression_analysis.dependent_variable}</p>
-                          <p><strong>Независимые переменные:</strong> {analysisResult.regression_analysis.independent_variables.join(", ")}</p>
-                    </div>
-                      </div>
-                      
-                      {/* Show all regression models in a table */}
-                      <div className="mt-6">
-                        <h3 className="text-lg font-semibold mb-4">Сравнение моделей регрессии</h3>
-                     <Table>
-                      <TableHeader>
-                        <TableRow>
-                              <TableHead>Тип модели</TableHead>
-                          <TableHead>R²</TableHead>
-                              <TableHead>Скорр. R²</TableHead>
-                              <TableHead>SSE</TableHead>
-                              {analysisResult.regression_analysis.models.some((m: RegressionModel) => m.regression_type === "Linear") && (
-                                <>
-                          <TableHead>F-статистика</TableHead>
-                              <TableHead>P-значение</TableHead>
-                                </>
-                              )}
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                            {analysisResult.regression_analysis.models
-                              // Sort models - Linear first, then by R²
-                              .sort((a: RegressionModel, b: RegressionModel) => {
-                                // Always put Linear first
-                                if (a.regression_type === "Linear") return -1;
-                                if (b.regression_type === "Linear") return 1;
-                                // Then sort by R-squared for the rest
-                                return b.r_squared - a.r_squared;
-                              })
-                              .map((model: RegressionModel, idx: number) => (
-                                <TableRow key={`model-${idx}`}>
-                                  <TableCell>{model.regression_type}</TableCell>
-                                  <TableCell>{formatNumber(model.r_squared)}</TableCell>
-                                  <TableCell>{formatNumber(model.adjusted_r_squared)}</TableCell>
-                                  <TableCell>{formatNumber(model.sse)}</TableCell>
-                                  {analysisResult.regression_analysis.models.some((m: RegressionModel) => m.regression_type === "Linear") && (
-                                    <>
-                                      <TableCell>
-                                        {model.regression_type === "Linear" 
-                                          ? formatNumber(model.f_statistic)
-                                          : "-"}
-                                      </TableCell>
-                                      <TableCell>
-                                        {model.regression_type === "Linear" 
-                                          ? formatNumber(model.prob_f_statistic)
-                                          : "-"}
-                                      </TableCell>
-                                    </>
-                                  )}
-                              </TableRow>
-                              ))
-                            }
-                      </TableBody>
-                    </Table>
+                          )}
+                          
+                          {/* Regression Chart */}
+                          {regressionAnalysis.data_points && regressionAnalysis.data_points.length > 0 && (
+                            <div className="mb-6 w-full">
+                              <h3 className="text-lg font-semibold mb-4">Графики регрессии</h3>
+                              
+                              {/* Regression Type Selector */}
+                              <div className="mb-4">
+                                <div className="flex flex-wrap gap-2">
+                                  {(() => {
+                                    const sortedModels = [...regressionAnalysis.models].sort((a, b) => {
+                                      return b.r_squared - a.r_squared;
+                                    });
+                                    
+                                    if (!selectedRegressionType && sortedModels.length > 0) {
+                                      const defaultType = sortedModels[0]?.regression_type;
+                                      setTimeout(() => {
+                                        setSelectedRegressionType(defaultType);
+                                      }, 0);
+                                      
+                                      return (
+                                        <>
+                                          {sortedModels.map(model => (
+                                            <Button
+                                              key={`btn-${model.regression_type}`}
+                                              variant={model.regression_type === defaultType ? "default" : "outline"}
+                                              size="sm"
+                                              onClick={() => setSelectedRegressionType(model.regression_type)}
+                                            >
+                                              {model.regression_type} (R² = {formatNumber(model.r_squared)})
+                                            </Button>
+                                          ))}
+                                          
+                                          {sortedModels
+                                            .filter(model => model.regression_type === defaultType)
+                                            .map((model, idx) => (
+                                              <div key={`regression-chart-${idx}`} className="w-full border rounded-lg p-2 bg-white shadow-sm">
+                                                <h4 className="text-lg font-medium mb-2 text-center">
+                                                  {model.regression_type} (R² = {formatNumber(model.r_squared)})
+                                                </h4>
+                                                <div className="bg-blue-50 p-3 mb-2 rounded-md">
+                                                  <p className="font-medium text-blue-800">Коэффициенты:</p>
+                                                  <div className="mt-1">
+                                                    {model.coefficients.map((c: RegressionCoefficient, i: number) => (
+                                                      <span key={`coef-${i}`} className="mr-4">
+                                                        {c.variable_name === "const" ? "Свободный член" : c.variable_name} = {formatNumber(c.coefficient)}
+                                                      </span>
+                                                    ))}
+                                                  </div>
+                                                </div>
+                                                <div className="w-full" style={{ minHeight: '650px', maxWidth: '100%' }}>
+                                                  <RegressionChart 
+                                                    data={regressionAnalysis.data_points}
+                                                    models={[{ type: model.regression_type, coefficients: model.coefficients, r_squared: model.r_squared }]}
+                                                    dependentVar={regressionAnalysis.dependent_variable}
+                                                    independentVar={regressionAnalysis.independent_variables[0]}
+                                                    height={700}
+                                                    globalYDomain={globalYDomain}
+                                                  />
+                                                </div>
+                                              </div>
+                                            ))}
+                                        </>
+                                      );
+                                    }
+                                    
+                                    return (
+                                      <>
+                                        {sortedModels.map(model => (
+                                          <Button
+                                            key={`btn-${model.regression_type}`}
+                                            variant={model.regression_type === selectedRegressionType ? "default" : "outline"}
+                                            size="sm"
+                                            onClick={() => setSelectedRegressionType(model.regression_type)}
+                                          >
+                                            {model.regression_type} (R² = {formatNumber(model.r_squared)})
+                                          </Button>
+                                        ))}
+                                        
+                                        {sortedModels
+                                          .filter(model => model.regression_type === selectedRegressionType)
+                                          .map((model, idx) => (
+                                            <div key={`regression-chart-${idx}`} className="w-full border rounded-lg p-2 bg-white shadow-sm">
+                                              <h4 className="text-lg font-medium mb-2 text-center">
+                                                {model.regression_type} (R² = {formatNumber(model.r_squared)})
+                                              </h4>
+                                              <div className="bg-blue-50 p-3 mb-2 rounded-md">
+                                                <p className="font-medium text-blue-800">Коэффициенты:</p>
+                                                <div className="mt-1">
+                                                  {model.coefficients.map((c: RegressionCoefficient, i: number) => (
+                                                    <span key={`coef-${i}`} className="mr-4">
+                                                      {c.variable_name === "const" ? "Свободный член" : c.variable_name} = {formatNumber(c.coefficient)}
+                                                    </span>
+                                                  ))}
+                                                </div>
+                                              </div>
+                                              <div className="w-full" style={{ minHeight: '650px', maxWidth: '100%' }}>
+                                                <RegressionChart 
+                                                  data={regressionAnalysis.data_points}
+                                                  models={[{ type: model.regression_type, coefficients: model.coefficients, r_squared: model.r_squared }]}
+                                                  dependentVar={regressionAnalysis.dependent_variable}
+                                                  independentVar={regressionAnalysis.independent_variables[0]}
+                                                  height={700}
+                                                  globalYDomain={globalYDomain}
+                                                />
+                                              </div>
+                                            </div>
+                                          ))}
+                                      </>
+                                    );
+                                  })()}
+                                </div>
                               </div>
-                      
-                      {/* Show coefficients of the best model */}
-                      <div className="mt-6">
-                        <h3 className="text-lg font-semibold">Коэффициенты лучшей модели</h3>
-                        {analysisResult.regression_analysis.models.length > 0 && (
-                          <>
-                            <p className="mb-2">
-                              <strong>Тип модели: </strong>
-                              {analysisResult.regression_analysis.models.sort((a: RegressionModel, b: RegressionModel) => b.r_squared - a.r_squared)[0].regression_type}
-                            </p>
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Переменная</TableHead>
-                                  <TableHead>Коэффициент</TableHead>
-                                  <TableHead>Стд. ошибка</TableHead>
-                                  {analysisResult.regression_analysis.models[0].regression_type === "Linear" && (
+                            </div>
+                          )}
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <p><strong>Зависимая переменная:</strong> {regressionAnalysis.dependent_variable}</p>
+                              <p><strong>Независимые переменные:</strong> {regressionAnalysis.independent_variables.join(", ")}</p>
+                            </div>
+                          </div>
+                          
+                          <div className="mt-6">
+                            <h3 className="text-lg font-semibold mb-4">Сравнение моделей регрессии</h3>
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Тип модели</TableHead>
+                                  <TableHead>R²</TableHead>
+                                  <TableHead>Скорр. R²</TableHead>
+                                  <TableHead>SSE</TableHead>
+                                  {regressionAnalysis.models.some((m: RegressionModel) => m.regression_type === "Linear") && (
                                     <>
-                                      <TableHead>T-статистика</TableHead>
+                                      <TableHead>F-статистика</TableHead>
                                       <TableHead>P-значение</TableHead>
                                     </>
                                   )}
-                                  <TableHead>95% ДИ (нижн.)</TableHead>
-                                  <TableHead>95% ДИ (верхн.)</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                                {analysisResult.regression_analysis.models
-                                  .sort((a: RegressionModel, b: RegressionModel) => b.r_squared - a.r_squared)[0]
-                                  .coefficients?.map((coeff: RegressionCoefficient, index: number) => (
-                                    <TableRow key={`coef-${index}-${coeff.variable_name}`}>
-                                      <TableCell>{coeff.variable_name}</TableCell>
-                                      <TableCell>{formatNumber(coeff.coefficient)}</TableCell>
-                                      <TableCell>{formatNumber(coeff.std_error)}</TableCell>
-                                      {analysisResult.regression_analysis.models[0].regression_type === "Linear" && (
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {regressionAnalysis.models
+                                  .sort((a: RegressionModel, b: RegressionModel) => {
+                                    return b.r_squared - a.r_squared;
+                                  })
+                                  .map((model: RegressionModel, idx: number) => (
+                                    <TableRow key={`model-${idx}`}>
+                                      <TableCell>{model.regression_type}</TableCell>
+                                      <TableCell>{formatNumber(model.r_squared)}</TableCell>
+                                      <TableCell>{formatNumber(model.adjusted_r_squared)}</TableCell>
+                                      <TableCell>{formatNumber(model.sse)}</TableCell>
+                                      {regressionAnalysis.models.some((m: RegressionModel) => m.regression_type === "Linear") && (
                                         <>
-                                          <TableCell>{formatNumber(coeff.t_statistic)}</TableCell>
-                                          <TableCell>{formatNumber(coeff.p_value)}</TableCell>
+                                          <TableCell>
+                                            {model.regression_type === "Linear" 
+                                              ? formatNumber(model.f_statistic)
+                                              : "-"}
+                                          </TableCell>
+                                          <TableCell>
+                                            {model.regression_type === "Linear" 
+                                              ? formatNumber(model.prob_f_statistic)
+                                              : "-"}
+                                          </TableCell>
                                         </>
                                       )}
-                                      <TableCell>{formatNumber(coeff.confidence_interval_lower)}</TableCell>
-                                      <TableCell>{formatNumber(coeff.confidence_interval_upper)}</TableCell>
-                            </TableRow>
-                          )) ?? (
-                            <TableRow>
-                                      <TableCell colSpan={7} className="text-center">Нет данных</TableCell>
-                            </TableRow>
-                          )}
-                        </TableBody>
-                      </Table>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                   </CardContent>
-                 </Card>
+                                    </TableRow>
+                                  ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                          
+                          <div className="mt-6">
+                            <h3 className="text-lg font-semibold">Коэффициенты лучшей модели</h3>
+                            {regressionAnalysis.models.length > 0 && (
+                              <>
+                                <p className="mb-2">
+                                  <strong>Тип модели: </strong>
+                                  {regressionAnalysis.models.sort((a: RegressionModel, b: RegressionModel) => b.r_squared - a.r_squared)[0].regression_type}
+                                </p>
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      <TableHead>Переменная</TableHead>
+                                      <TableHead>Коэффициент</TableHead>
+                                      <TableHead>Стд. ошибка</TableHead>
+                                      {regressionAnalysis.models[0].regression_type === "Linear" && (
+                                        <>
+                                          <TableHead>T-статистика</TableHead>
+                                          <TableHead>P-значение</TableHead>
+                                        </>
+                                      )}
+                                      <TableHead>95% ДИ (нижн.)</TableHead>
+                                      <TableHead>95% ДИ (верхн.)</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {regressionAnalysis.models
+                                      .sort((a: RegressionModel, b: RegressionModel) => b.r_squared - a.r_squared)[0]
+                                      .coefficients?.map((coeff: RegressionCoefficient, index: number) => (
+                                        <TableRow key={`coef-${index}-${coeff.variable_name}`}>
+                                          <TableCell>{coeff.variable_name}</TableCell>
+                                          <TableCell>{formatNumber(coeff.coefficient)}</TableCell>
+                                          <TableCell>{formatNumber(coeff.std_error)}</TableCell>
+                                          {regressionAnalysis.models[0].regression_type === "Linear" && (
+                                            <>
+                                              <TableCell>{formatNumber(coeff.t_statistic)}</TableCell>
+                                              <TableCell>{formatNumber(coeff.p_value)}</TableCell>
+                                            </>
+                                          )}
+                                          <TableCell>{formatNumber(coeff.confidence_interval_lower)}</TableCell>
+                                          <TableCell>{formatNumber(coeff.confidence_interval_upper)}</TableCell>
+                                        </TableRow>
+                                      )) ?? (
+                                        <TableRow>
+                                          <TableCell colSpan={7} className="text-center">Нет данных</TableCell>
+                                        </TableRow>
+                                      )}
+                                  </TableBody>
+                                </Table>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()} 
+                  </CardContent>
+                </Card>
               </TabsContent>
               )}
 
