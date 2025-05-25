@@ -45,7 +45,7 @@ export function DashboardNav() {
 
   return (
     <header className="sticky top-0 z-40 border-b bg-white">
-      <div className="container flex h-16 items-center justify-between">
+      <div className="container mx-auto flex h-16 items-center justify-between">
         <div className="flex items-center">
           <Sheet open={isOpen} onOpenChange={setIsOpen}>
             <SheetTrigger asChild className="lg:hidden">

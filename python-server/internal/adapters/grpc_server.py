@@ -208,6 +208,9 @@ class AnalysisServiceGrpcAdapter(analysis_pb2_grpc.AnalysisServiceServicer):
                     else:
                         model.regression_type = "Linear"
                     
+                    # Debug logging
+                    grpc_response.processing_log.append(f"DEBUG: Adding regression model of type: {model.regression_type}")
+                    
                     # Set model metrics
                     model.r_squared = reg_domain_data.r_squared
                     model.adjusted_r_squared = reg_domain_data.adjusted_r_squared

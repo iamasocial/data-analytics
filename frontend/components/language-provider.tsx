@@ -184,6 +184,18 @@ const translations: Translations = {
     ru: "Отправить ссылку для сброса",
     en: "Send Reset Link",
   },
+  "results.tabs.descriptiveStats": {
+    ru: "Описательная статистика",
+    en: "Descriptive Statistics"
+  },
+  "results.tabs.normalityTest": {
+    ru: "Проверка нормальности",
+    en: "Normality Test"
+  },
+  "results.tabs.regression": {
+    ru: "Модели регрессии",
+    en: "Regression Models"
+  },
 }
 
 type LanguageContextType = {

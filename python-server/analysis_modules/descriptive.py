@@ -94,6 +94,6 @@ def calculate_descriptive_stats(df: pd.DataFrame) -> Tuple[List[Dict[str, Any]],
             logs.append(f"Warning: Could not calculate histogram for '{col_name}': {e}")
             # Optionally append a placeholder or skip if histogram fails
             # histogram_results.append({"variable_name": col_name, "bins": [], "frequencies": []}) 
-
+            
     # Return only three lists (no boxplot_results)
     return descriptive_results, histogram_results, logs 

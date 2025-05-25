@@ -74,6 +74,7 @@ export default function UploadPage() {
   const [fileColumns, setFileColumns] = useState<string[]>([]);
   const [dependentVariable, setDependentVariable] = useState<string>("");
   const [independentVariable, setIndependentVariable] = useState<string>("");
+  const [selectedRegressionType, setSelectedRegressionType] = useState<string>("");
 
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
@@ -120,6 +121,7 @@ export default function UploadPage() {
     setUploadStatus("idle")
     setUploadProgress(0)
     setAnalysisResult(null)
+    setSelectedRegressionType("")
   }
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -133,6 +135,14 @@ export default function UploadPage() {
 
   const removeFile = (index: number) => {
     setFiles((prev) => prev.filter((_, i) => i !== index))
+    // Clear analysis results and related state when file is removed
+    setAnalysisResult(null)
+    setFileColumns([])
+    setDependentVariable("")
+    setIndependentVariable("")
+    setUploadStatus("idle")
+    setUploadProgress(0)
+    setSelectedRegressionType("")
   }
 
   const getFileIcon = (fileName: string) => {
@@ -680,7 +690,7 @@ export default function UploadPage() {
                         <TableRow>
                           <TableHead>Переменная</TableHead>
                           <TableHead>Статистика</TableHead>
-                            <TableHead>P-значение</TableHead>
+                          <TableHead>P-значение</TableHead>
                           <TableHead>Степени свободы</TableHead>
                             <TableHead>Интервалы</TableHead>
                           <TableHead>Вывод (alpha=0.05)</TableHead>
@@ -715,66 +725,205 @@ export default function UploadPage() {
 
               {analysisResult?.regression_analysis && (
               <TabsContent value="regression">
-                <Card>
+                <Card className="w-full overflow-hidden">
                   <CardHeader>
                     <CardTitle>Регрессионный Анализ</CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="p-0 md:p-1">
                     <div className="space-y-6">
-                      {/* Regression Chart */}
-                      {analysisResult.regression_analysis.data_points && analysisResult.regression_analysis.data_points.length > 0 && (
-                        <div className="mb-6 space-y-8">
-                          <h3 className="text-lg font-semibold mb-2">Графики регрессии</h3>
-                          {/* Render each model on a separate chart */}
-                          {analysisResult.regression_analysis.models.map((model: RegressionModel, idx: number) => (
-                            <div key={`regression-chart-${idx}`} className="border rounded-lg p-4">
-                              <h4 className="text-md font-semibold mb-2 text-center">
-                                {model.regression_type} (R² = {formatNumber(model.r_squared)})
-                              </h4>
-                              <RegressionChart 
-                                data={analysisResult.regression_analysis.data_points}
-                                models={[{
-                                  type: model.regression_type,
-                                  coefficients: model.coefficients,
-                                  r_squared: model.r_squared
-                                }]}
-                                dependentVar={analysisResult.regression_analysis.dependent_variable}
-                                independentVar={analysisResult.regression_analysis.independent_variables[0]}
-                              />
-                            </div>
-                          ))}
+                      {/* Debug info for regression models */}
+                      {process.env.NODE_ENV !== "production" && (
+                        <div className="bg-gray-100 p-2 rounded-md mb-4 text-sm">
+                          <p className="font-bold">Debug - Regression Models:</p>
+                          <pre className="overflow-x-auto whitespace-pre-wrap">
+                            {JSON.stringify(analysisResult.regression_analysis.models.map((m: RegressionModel) => ({
+                              type: m.regression_type,
+                              r2: m.r_squared,
+                              coefs: m.coefficients.map((c: RegressionCoefficient) => `${c.variable_name}: ${c.coefficient}`)
+                            })), null, 2)}
+                          </pre>
                         </div>
                       )}
                       
+                      {/* Regression Chart */}
+                      {analysisResult.regression_analysis.data_points && analysisResult.regression_analysis.data_points.length > 0 && (
+                        <div className="mb-6 w-full">
+                          <h3 className="text-lg font-semibold mb-4">Графики регрессии</h3>
+                          
+                          {/* Regression Type Selector */}
+                          <div className="mb-4">
+                            <div className="flex flex-wrap gap-2">
+                              {(() => {
+                                // Сортируем модели: линейная первая, потом по убыванию R²
+                                const sortedModels = [...analysisResult.regression_analysis.models].sort((a, b) => {
+                                  if (a.regression_type === "Linear") return -1;
+                                  if (b.regression_type === "Linear") return 1;
+                                  return b.r_squared - a.r_squared;
+                                });
+                                
+                                // Инициализируем тип регрессии, если он еще не выбран
+                                if (!selectedRegressionType && sortedModels.length > 0) {
+                                  // Ищем линейную регрессию или берем первую модель
+                                  const defaultType = sortedModels.find(m => m.regression_type === "Linear")?.regression_type || 
+                                                    sortedModels[0]?.regression_type;
+                                  
+                                  // Устанавливаем выбранный тип регрессии (с задержкой через setTimeout,
+                                  // чтобы избежать ошибки обновления состояния во время рендеринга)
+                                  setTimeout(() => {
+                                    setSelectedRegressionType(defaultType);
+                                  }, 0);
+                                  
+                                  // В первый раз показываем модель по умолчанию
+                                  return (
+                                    <>
+                                      {sortedModels.map(model => (
+                                        <Button
+                                          key={`btn-${model.regression_type}`}
+                                          variant={model.regression_type === defaultType ? "default" : "outline"}
+                                          size="sm"
+                                          onClick={() => setSelectedRegressionType(model.regression_type)}
+                                        >
+                                          {model.regression_type} (R² = {formatNumber(model.r_squared)})
+                                        </Button>
+                                      ))}
+                                      
+                                      {/* Показываем модель по умолчанию */}
+                                      {sortedModels
+                                        .filter(model => model.regression_type === defaultType)
+                                        .map((model, idx) => (
+                                          <div key={`regression-chart-${idx}`} className="w-full border rounded-lg p-2 bg-white shadow-sm">
+                                            <h4 className="text-lg font-medium mb-2 text-center">
+                                              {model.regression_type} (R² = {formatNumber(model.r_squared)})
+                                            </h4>
+                                            
+                                            {/* Информация о коэффициентах в читаемом формате */}
+                                            <div className="bg-blue-50 p-3 mb-2 rounded-md">
+                                              <p className="font-medium text-blue-800">Коэффициенты:</p>
+                                              <div className="mt-1">
+                                                {model.coefficients.map((c: RegressionCoefficient, i: number) => (
+                                                  <span key={`coef-${i}`} className="mr-4">
+                                                    {c.variable_name === "const" ? "Свободный член" : c.variable_name} = {formatNumber(c.coefficient)}
+                                                  </span>
+                                                ))}
+                                              </div>
+                    </div>
+
+                                            {/* Контейнер для графика на всю доступную ширину */}
+                                            <div className="w-full" style={{ minHeight: '650px', maxWidth: '100%' }}>
+                                              <RegressionChart 
+                                                data={analysisResult.regression_analysis.data_points}
+                                                models={[{
+                                                  type: model.regression_type,
+                                                  coefficients: model.coefficients,
+                                                  r_squared: model.r_squared
+                                                }]}
+                                                dependentVar={analysisResult.regression_analysis.dependent_variable}
+                                                independentVar={analysisResult.regression_analysis.independent_variables[0]}
+                                                height={700}
+                                              />
+                              </div>
+                                          </div>
+                                        ))
+                                      }
+                                    </>
+                                  );
+                                }
+                                
+                                // Отображение для последующих рендеров когда тип уже выбран
+                                return (
+                                  <>
+                                    {sortedModels.map(model => (
+                                      <Button
+                                        key={`btn-${model.regression_type}`}
+                                        variant={model.regression_type === selectedRegressionType ? "default" : "outline"}
+                                        size="sm"
+                                        onClick={() => setSelectedRegressionType(model.regression_type)}
+                                      >
+                                        {model.regression_type} (R² = {formatNumber(model.r_squared)})
+                                      </Button>
+                                    ))}
+                                    
+                                    {/* Отображаем только выбранную регрессию */}
+                                    {sortedModels
+                                      .filter(model => model.regression_type === selectedRegressionType)
+                                      .map((model, idx) => (
+                                        <div key={`regression-chart-${idx}`} className="w-full border rounded-lg p-2 bg-white shadow-sm">
+                                          <h4 className="text-lg font-medium mb-2 text-center">
+                                            {model.regression_type} (R² = {formatNumber(model.r_squared)})
+                                          </h4>
+                                          
+                                          {/* Информация о коэффициентах в читаемом формате */}
+                                          <div className="bg-blue-50 p-3 mb-2 rounded-md">
+                                            <p className="font-medium text-blue-800">Коэффициенты:</p>
+                                            <div className="mt-1">
+                                              {model.coefficients.map((c: RegressionCoefficient, i: number) => (
+                                                <span key={`coef-${i}`} className="mr-4">
+                                                  {c.variable_name === "const" ? "Свободный член" : c.variable_name} = {formatNumber(c.coefficient)}
+                                                </span>
+                                              ))}
+                                            </div>
+                                          </div>
+                                          
+                                          {/* Контейнер для графика на всю доступную ширину */}
+                                          <div className="w-full" style={{ minHeight: '650px', maxWidth: '100%' }}>
+                                            <RegressionChart 
+                                              data={analysisResult.regression_analysis.data_points}
+                                              models={[{
+                                                type: model.regression_type,
+                                                coefficients: model.coefficients,
+                                                r_squared: model.r_squared
+                                              }]}
+                                              dependentVar={analysisResult.regression_analysis.dependent_variable}
+                                              independentVar={analysisResult.regression_analysis.independent_variables[0]}
+                                              height={700}
+                                            />
+                                          </div>
+                                        </div>
+                                      ))
+                                    }
+                                  </>
+                                );
+                              })()}
+                            </div>
+                        </div>
+                      </div>
+                    )}
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
+                     <div>
                           <p><strong>Зависимая переменная:</strong> {analysisResult.regression_analysis.dependent_variable}</p>
                           <p><strong>Независимые переменные:</strong> {analysisResult.regression_analysis.independent_variables.join(", ")}</p>
-                        </div>
+                    </div>
                       </div>
                       
                       {/* Show all regression models in a table */}
                       <div className="mt-6">
                         <h3 className="text-lg font-semibold mb-4">Сравнение моделей регрессии</h3>
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
+                     <Table>
+                      <TableHeader>
+                        <TableRow>
                               <TableHead>Тип модели</TableHead>
-                              <TableHead>R²</TableHead>
+                          <TableHead>R²</TableHead>
                               <TableHead>Скорр. R²</TableHead>
                               <TableHead>SSE</TableHead>
                               {analysisResult.regression_analysis.models.some((m: RegressionModel) => m.regression_type === "Linear") && (
                                 <>
-                                  <TableHead>F-статистика</TableHead>
+                          <TableHead>F-статистика</TableHead>
                               <TableHead>P-значение</TableHead>
                                 </>
                               )}
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                             {analysisResult.regression_analysis.models
-                              // Sort models by R² (highest first)
-                              .sort((a: RegressionModel, b: RegressionModel) => b.r_squared - a.r_squared)
+                              // Sort models - Linear first, then by R²
+                              .sort((a: RegressionModel, b: RegressionModel) => {
+                                // Always put Linear first
+                                if (a.regression_type === "Linear") return -1;
+                                if (b.regression_type === "Linear") return 1;
+                                // Then sort by R-squared for the rest
+                                return b.r_squared - a.r_squared;
+                              })
                               .map((model: RegressionModel, idx: number) => (
                                 <TableRow key={`model-${idx}`}>
                                   <TableCell>{model.regression_type}</TableCell>
@@ -798,9 +947,9 @@ export default function UploadPage() {
                               </TableRow>
                               ))
                             }
-                          </TableBody>
-                        </Table>
-                    </div>
+                      </TableBody>
+                    </Table>
+                              </div>
                       
                       {/* Show coefficients of the best model */}
                       <div className="mt-6">
@@ -811,10 +960,10 @@ export default function UploadPage() {
                               <strong>Тип модели: </strong>
                               {analysisResult.regression_analysis.models.sort((a: RegressionModel, b: RegressionModel) => b.r_squared - a.r_squared)[0].regression_type}
                             </p>
-                     <Table>
-                      <TableHeader>
-                        <TableRow>
-                                  <TableHead>Переменная</TableHead>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Переменная</TableHead>
                                   <TableHead>Коэффициент</TableHead>
                                   <TableHead>Стд. ошибка</TableHead>
                                   {analysisResult.regression_analysis.models[0].regression_type === "Linear" && (
@@ -825,9 +974,9 @@ export default function UploadPage() {
                                   )}
                                   <TableHead>95% ДИ (нижн.)</TableHead>
                                   <TableHead>95% ДИ (верхн.)</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
                                 {analysisResult.regression_analysis.models
                                   .sort((a: RegressionModel, b: RegressionModel) => b.r_squared - a.r_squared)[0]
                                   .coefficients?.map((coeff: RegressionCoefficient, index: number) => (
@@ -843,20 +992,20 @@ export default function UploadPage() {
                                       )}
                                       <TableCell>{formatNumber(coeff.confidence_interval_lower)}</TableCell>
                                       <TableCell>{formatNumber(coeff.confidence_interval_upper)}</TableCell>
-                          </TableRow>
-                        )) ?? (
-                          <TableRow>
+                            </TableRow>
+                          )) ?? (
+                            <TableRow>
                                       <TableCell colSpan={7} className="text-center">Нет данных</TableCell>
-                          </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
                           </>
                         )}
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
+                   </CardContent>
+                 </Card>
               </TabsContent>
               )}
 

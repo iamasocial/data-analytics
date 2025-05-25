@@ -60,11 +60,13 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <div className="flex items-center justify-between p-4 border-b">
+      <div className="border-b">
+        <div className="container mx-auto flex items-center justify-between p-4">
         <Link href="/" className="text-xl font-bold">
           DataAnalytics
         </Link>
         <LanguageSwitcher />
+        </div>
       </div>
       <div className="flex flex-1 items-center justify-center p-4">
         <div className="w-full max-w-md space-y-6 p-6 bg-white rounded-lg shadow-md">
