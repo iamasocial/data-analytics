@@ -105,31 +105,52 @@ class AnalysisService(AnalysisServicePort):
                 
                 # --- Тесты на нормальность (Шапиро-Уилка) ---
                 if NORMALITY_TEST_ANALYSIS in selected_analyses:
-                    normality_results, norm_logs = self.normality_test.perform_normality_test(df)
+                    normality_results, norm_logs = self.normality_test.perform_normality_test(df) # alpha по умолчанию 0.05
                     response.processing_log.extend(norm_logs)
                     for test_dict in normality_results:
+                        p_value = test_dict.get("p_value", 0.0)
+                        is_normal_val = p_value > 0.05 # Стандартный alpha = 0.05
+                        if pd.isna(p_value): # Если p_value нет, считаем неопределенным
+                            is_normal_val = False # Или можно ввести третье состояние/оставить conclusion
+
                         test = NormalityTestResult(
                             variable_name=test_dict.get("variable_name", ""),
                             test_name=test_dict.get("test_name", ""),
                             statistic=test_dict.get("statistic", 0.0) if pd.notna(test_dict.get("statistic")) else 0.0,
-                            p_value=test_dict.get("p_value", 0.0) if pd.notna(test_dict.get("p_value")) else 0.0,
-                            conclusion=test_dict.get("conclusion", "")
+                            p_value=p_value if pd.notna(p_value) else 0.0,
+                            is_normal=is_normal_val, # Используем рассчитанное значение
+                            conclusion=test_dict.get("conclusion", "") # Оставляем для логов/детальной информации
                         )
                         response.normality_tests.append(test)
                 
                     # --- Критерий хи-квадрат (как часть проверки нормальности) ---
                     # Считаем, что хи-квадрат выполняется, если выбрана проверка нормальности
-                    chi2_results, chi2_logs = self.goodness_of_fit.perform_chi_square_test(df)
+                    chi2_results, chi2_logs = self.goodness_of_fit.perform_chi_square_test(df) # alpha по умолчанию 0.05
                     response.processing_log.extend(chi2_logs)
                     for chi2_dict in chi2_results:
+                        p_value_chi2 = chi2_dict.get("p_value", 0.0)
+                        is_normal_chi2 = p_value_chi2 > 0.05 # Стандартный alpha = 0.05
+                        if pd.isna(p_value_chi2):
+                            is_normal_chi2 = False
+
+                        # Обработка NaN для degrees_of_freedom
+                        df_value = chi2_dict.get("degrees_of_freedom")
+                        degrees_of_freedom_val = int(df_value) if pd.notna(df_value) and df_value is not None else 0
+                        
+                        # Обработка NaN для intervals
+                        intervals_value = chi2_dict.get("intervals")
+                        intervals_val = int(intervals_value) if pd.notna(intervals_value) and intervals_value is not None else 0
+
                         chi2 = PearsonChiSquareResult(
                             variable_name=chi2_dict.get("variable_name", ""),
-                            test_name=chi2_dict.get("test_name", ""),
+                            test_name=chi2_dict.get("test_name", ""), # Убедимся, что это поле есть в chi2_dict
                             distribution=chi2_dict.get("distribution", ""),
                             statistic=chi2_dict.get("statistic", 0.0) if pd.notna(chi2_dict.get("statistic")) else 0.0,
-                            p_value=chi2_dict.get("p_value", 0.0) if pd.notna(chi2_dict.get("p_value")) else 0.0,
-                            degrees_of_freedom=int(chi2_dict.get("degrees_of_freedom", 0)),
-                            conclusion=chi2_dict.get("conclusion", "")
+                            p_value=p_value_chi2 if pd.notna(p_value_chi2) else 0.0,
+                            degrees_of_freedom=degrees_of_freedom_val, # Исправлено
+                            intervals=intervals_val, # Исправлено
+                            is_normal=is_normal_chi2, # Используем рассчитанное значение
+                            conclusion=chi2_dict.get("conclusion", "") # Оставляем для логов
                         )
                         response.pearson_chi_square_results.append(chi2)
 

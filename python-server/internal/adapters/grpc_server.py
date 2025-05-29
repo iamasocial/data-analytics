@@ -166,7 +166,11 @@ class AnalysisServiceGrpcAdapter(analysis_pb2_grpc.AnalysisServiceServicer):
                     test_msg.test_name = test.test_name
                     test_msg.statistic = test.statistic
                     test_msg.p_value = test.p_value
-                    test_msg.is_normal = test.p_value > 0.05 or "не отвергается" in test.conclusion.lower() or "fail to reject" in test.conclusion.lower() or "gaussian" in test.conclusion.lower()
+                    # Используем is_normal из доменной сущности, если оно там есть, иначе считаем по p_value
+                    if hasattr(test, 'is_normal'):
+                        test_msg.is_normal = test.is_normal
+                    else: # Обратная совместимость или если is_normal не было установлено
+                        test_msg.is_normal = test.p_value > 0.05 
                     norm_tests_response.shapiro_wilk_results.append(test_msg)
                 
                 for chi2 in domain_response.pearson_chi_square_results:
@@ -175,8 +179,12 @@ class AnalysisServiceGrpcAdapter(analysis_pb2_grpc.AnalysisServiceServicer):
                     chi2_msg.statistic = chi2.statistic
                     chi2_msg.p_value = chi2.p_value
                     chi2_msg.degrees_of_freedom = chi2.degrees_of_freedom
-                    chi2_msg.intervals = 0
-                    chi2_msg.is_normal = chi2.p_value > 0.05 or "не отвергается" in chi2.conclusion.lower() or "fail to reject" in chi2.conclusion.lower()
+                    chi2_msg.intervals = chi2.intervals # Используем значение из доменной сущности
+                    # Используем is_normal из доменной сущности, если оно там есть, иначе считаем по p_value
+                    if hasattr(chi2, 'is_normal'):
+                        chi2_msg.is_normal = chi2.is_normal
+                    else:
+                        chi2_msg.is_normal = chi2.p_value > 0.05
                     norm_tests_response.chi_square_results.append(chi2_msg)
                 grpc_response.normality_tests.CopyFrom(norm_tests_response)
 

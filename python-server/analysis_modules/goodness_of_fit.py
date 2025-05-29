@@ -41,6 +41,7 @@ def perform_chi_square_test(df: pd.DataFrame, distribution: str = 'norm', alpha:
             "statistic": np.nan,
             "p_value": np.nan,
             "degrees_of_freedom": np.nan,
+            "intervals": 0,
             "conclusion": "N/A"
         }
 
@@ -140,6 +141,7 @@ def perform_chi_square_test(df: pd.DataFrame, distribution: str = 'norm', alpha:
                 test_result["statistic"] = float(chi2_stat)
                 test_result["p_value"] = float(p_value)
                 test_result["degrees_of_freedom"] = degrees_of_freedom
+                test_result["intervals"] = current_num_bins
                 if p_value < alpha:
                     test_result["conclusion"] = f"Reject H0 (distribution likely not {distribution} at alpha={alpha})"
                 else:

@@ -82,7 +82,7 @@ message NormalityTestResult {
     string test_name = 2;     // например, "Shapiro-Wilk"
     double statistic = 3;
     double p_value = 4;
-    bool is_normal = 5;       // Новое поле (вместо conclusion)
+    bool is_normal = 5;       // Возвращаем тег на 5
 }
 
 // Результаты теста хи-квадрат на соответствие распределению

@@ -50,6 +50,7 @@ class NormalityTestResult:
     test_name: str
     statistic: float = 0.0
     p_value: float = 0.0
+    is_normal: bool = False
     conclusion: str = ""
 
 @dataclass
@@ -61,6 +62,8 @@ class PearsonChiSquareResult:
     statistic: float = 0.0
     p_value: float = 0.0
     degrees_of_freedom: int = 0
+    intervals: int = 0
+    is_normal: bool = False
     conclusion: str = ""
 
 @dataclass

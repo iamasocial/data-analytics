@@ -5,6 +5,8 @@ import statsmodels.api as sm
 from statsmodels.tools.sm_exceptions import PerfectSeparationError
 from typing import List, Dict, Any, Tuple
 from scipy.optimize import curve_fit
+from scipy.signal import find_peaks
+import sys # Добавлено для отладочного вывода в stderr
 # Импортируем сгенерированные классы protobuf
 # import analysis_pb2 # Закомментировано, так как не используется в этом фрагменте
 
@@ -92,6 +94,66 @@ def calculate_sse(y_true, y_pred):
     y_true = np.asarray(y_true)
     y_pred = np.asarray(y_pred)
     return np.sum((y_true - y_pred)**2)
+
+def estimate_dominant_frequency(x_data: np.ndarray, y_data: np.ndarray, min_points_for_fft: int = 10) -> float | None:
+    """
+    Оценивает доминирующую частоту в y_data с использованием FFT.
+    Возвращает частоту в циклах на единицу x или None.
+    """
+    n = len(y_data)
+    if n < min_points_for_fft: # Требуем минимальное количество точек для осмысленного FFT
+        return None
+
+    # Вычитаем среднее, чтобы убрать компоненту с нулевой частотой из основного пика
+    y_detrended = y_data - np.mean(y_data)
+
+    # FFT
+    yf = np.fft.fft(y_detrended)
+    # Частоты, соответствующие yf. x_spacing - средний интервал между точками x
+    # Если x_data не отсортированы или имеют большие пропуски, это может быть неточно.
+    # Предполагаем, что x_data более-менее упорядочены.
+    if n > 1:
+        x_spacing = (np.max(x_data) - np.min(x_data)) / (n - 1)
+        if x_spacing < 1e-9: # Если все x одинаковы
+             return None
+    else:
+        return None # Невозможно определить интервал для одной точки
+
+    # Получаем частоты для FFT (в циклах на единицу x)
+    # Используем x_spacing как интервал дискретизации
+    freq = np.fft.fftfreq(n, d=x_spacing)
+
+    # Интересуют только положительные частоты (первая половина спектра)
+    # и исключаем нулевую частоту (постоянную составляющую, которую мы уже убрали)
+    positive_freq_indices = np.where((freq > 1e-9))[0] # 1e-9 чтобы точно исключить 0
+    
+    if len(positive_freq_indices) == 0:
+        return None # Нет положительных частот (например, если все y_data одинаковы после вычитания среднего)
+
+    # Амплитуды для положительных частот
+    amplitudes = np.abs(yf[positive_freq_indices])
+    
+    # Используем find_peaks для поиска пиков в амплитудном спектре
+    # height - минимальная высота пика (можно настроить)
+    # distance - минимальное расстояние между пиками (можно настроить)
+    peaks_indices, properties = find_peaks(amplitudes, height=np.max(amplitudes)*0.1, distance=1)
+
+    if len(peaks_indices) == 0: # Если пики не найдены
+        # В качестве запасного варианта, если пики не найдены, но есть положительные частоты,
+        # можно взять частоту с максимальной амплитудой.
+        # Но это может быть менее надежно, чем find_peaks.
+        # Пока вернем None, если find_peaks не нашел явных пиков.
+        # Или: dominant_peak_index_in_amplitudes = np.argmax(amplitudes)
+        return None
+    
+    # Берем самый высокий пик
+    dominant_peak_index_in_amplitudes = peaks_indices[np.argmax(properties["peak_heights"])]
+    
+    # Частота, соответствующая этому пику
+    dominant_freq = freq[positive_freq_indices[dominant_peak_index_in_amplitudes]]
+    
+    # Частота из fftfreq - это циклы на единицу x
+    return dominant_freq
 
 def perform_simple_linear_regression(df: pd.DataFrame, dependent_var: str = None, independent_var: str = None) -> Tuple[List[RegressionData], List[str]]:
     logs = []
@@ -201,6 +263,7 @@ def perform_simple_linear_regression(df: pd.DataFrame, dependent_var: str = None
                 all_models_for_pair.append(regression_result)
                 logs.append(log_prefix + "Linear model (OLS) fitted successfully.")
                 logs.append(f"DEBUG: {log_prefix}Linear regression - Added to model list, total for pair: {len(all_models_for_pair)}")
+                logs.append(log_prefix + f"Linear model (OLS) fitted. R²={results.rsquared:.4f}, SSE={results.ssr:.4f}")
             else:
                 logs.append(log_prefix + "Skipped linear model (OLS) summary due to NaN in main metrics or no valid coefficients.")
                 logs.append(f"DEBUG: {log_prefix}Linear regression (OLS) - Metrics: rsquared={results.rsquared}, rsquared_adj={results.rsquared_adj}, fvalue={results.fvalue}, f_pvalue={results.f_pvalue}")
@@ -217,71 +280,257 @@ def perform_simple_linear_regression(df: pd.DataFrame, dependent_var: str = None
             logs.append(f"DEBUG: {log_prefix}Linear regression (OLS) - Exception details: {error_traceback}")
 
         # 2. Нелинейные регрессии через scipy.optimize.curve_fit
-        for reg_type, func, n_params in regression_types:
-            try:
-                p0 = np.ones(n_params) # Начальные параметры
+        # Добавляем внешний try-except для всего цикла
+        try: 
+            print("DEBUG: Entering non-linear regression loop.", file=sys.stderr) # Отладка
+            for reg_type, func, n_params in regression_types:
+                print(f"DEBUG: Processing model type: {reg_type}", file=sys.stderr) # Отладка
+                try:
+                    p0 = np.ones(n_params) # Общее начальное значение по умолчанию
+                    bounds = (-np.inf, np.inf) # Общие границы по умолчанию (без ограничений)
+                    method_for_curve_fit = 'lm' # Метод по умолчанию
+                    current_maxfev = 10000 # Значение по умолчанию для maxfev
 
-                # Для некоторых функций могут потребоваться более специфичные p0 или ограничения
-                if reg_type in ["Power", "Logarithmic"] and np.any(x_data <= 1e-9): # небольшой порог
-                    logs.append(log_prefix + f"Skipped {reg_type} model (non-positive values in X).")
-                    continue
+                    if reg_type == "Trigonometric":
+                        y_mean = np.mean(y_data)
+                        y_amplitude = (np.max(y_data) - np.min(y_data)) / 2.0
+                        if y_amplitude < 1e-6: 
+                            y_amplitude = 1.0 
+                        
+                        b_initial_guess = None
+                        dominant_freq_hz = estimate_dominant_frequency(x_data, y_data)
+                        
+                        x_range_val = np.max(x_data) - np.min(x_data)
+                        if x_range_val < 1e-6: # Защита от деления на ноль или слишком малого диапазона
+                            x_range_val = 1.0 # Используем значение по умолчанию, если диапазон X слишком мал
 
-                params, pcov = curve_fit(func, x_data, y_data, p0=p0, maxfev=10000, check_finite=True)
+                        if dominant_freq_hz is not None and dominant_freq_hz > 1e-6:
+                            b_initial_guess = 2 * np.pi * dominant_freq_hz
+                            logs.append(log_prefix + f"Trigonometric FFT: Estimated dominant frequency (Hz) = {dominant_freq_hz:.4f}, b_initial_guess = {b_initial_guess:.4f}")
+                        else:
+                            # Fallback: один полный цикл в диапазоне x_data
+                            b_initial_guess = (2 * np.pi) / x_range_val 
+                            if b_initial_guess < 1e-6: # Дополнительная проверка
+                                 b_initial_guess = 1.0
+                            logs.append(log_prefix + f"Trigonometric Fallback: Using x_range for b_initial_guess = {b_initial_guess:.4f}")
 
-                valid_covariance = pcov is not None and not np.any(np.isinf(pcov)) and np.all(np.diag(pcov) >= 0) # >=0, т.к. дисперсия может быть 0
+                        # Определение границ для b
+                        if x_range_val > 1e-6:
+                            b_lower_bound = np.pi / x_range_val  # Период до 2 * x_range
+                            b_upper_bound = 40 * np.pi / x_range_val # Период до x_range / 20 (20 циклов)
+                        else: # Если x_range_val очень мал
+                            b_lower_bound = 1e-3
+                            b_upper_bound = 1e3
+                        
+                        # Убедимся, что b_initial_guess находится в границах
+                        if b_initial_guess < b_lower_bound:
+                            b_initial_guess = b_lower_bound
+                            logs.append(log_prefix + f"Trigonometric: Clipped b_initial_guess to lower bound: {b_initial_guess:.4f}")
+                        elif b_initial_guess > b_upper_bound:
+                            b_initial_guess = b_upper_bound
+                            logs.append(log_prefix + f"Trigonometric: Clipped b_initial_guess to upper bound: {b_initial_guess:.4f}")
+                        
+                        p0 = [
+                            y_amplitude,      # a: амплитуда
+                            b_initial_guess,  # b: частота (уже в границах)
+                            0.0,              # c: фаза
+                            y_mean            # d: вертикальный сдвиг
+                        ]
+                        
+                        bounds = (
+                            [1e-9, b_lower_bound, -2 * np.pi, -np.inf], 
+                            [np.inf, b_upper_bound, 2 * np.pi, np.inf]   
+                        )
+                        method_for_curve_fit = 'trf'
+                        current_maxfev = 20000 # Уменьшено, чтобы избежать таймаутов
+                        print(f"DEBUG: {log_prefix}Trigonometric - Initial p0: {p0}, Bounds for b: ({b_lower_bound:.4f}, {b_upper_bound:.4f})", file=sys.stderr)
 
-                y_pred = func(x_data, *params)
-                r_squared = calculate_r_squared(y_data, y_pred)
-                sse = calculate_sse(y_data, y_pred)
+                    if reg_type == "Sigmoid":
+                        # Определение начальных приближений (p0) для сигмоиды
+                        y_min, y_max = np.min(y_data), np.max(y_data)
+                        x_min, x_max = np.min(x_data), np.max(x_data)
 
-                coefficients_nl = []
-                param_names_map = {
-                    "Power": ["a", "b"], "Logarithmic": ["a", "b"],
-                    "Quadratic": ["a", "b", "c"], "Trigonometric": ["a", "b", "c", "d"],
-                    "Sigmoid": ["a", "b", "c"]
-                }
-                current_param_names = param_names_map[reg_type]
+                        c0 = y_max
+                        if abs(y_max - y_min) < 1e-6: # Если Y почти не меняется
+                            if abs(y_max) < 1e-6: # Если Y около нуля
+                                c0 = 1.0 # Небольшое положительное значение
+                            # иначе c0 остается y_max
+                        
+                        # Ищем x, где y ближе всего к c0/2
+                        # Если c0 очень мало, y_target_for_b0 может быть почти 0, что нормально
+                        y_target_for_b0 = y_min + (c0 - y_min) / 2.0 
+                        
+                        # Проверим, что y_data не пустой и содержит не только NaN
+                        valid_y_indices = ~np.isnan(y_data)
+                        if np.any(valid_y_indices):
+                            b0_index = np.argmin(np.abs(y_data[valid_y_indices] - y_target_for_b0))
+                            b0 = x_data[valid_y_indices][b0_index]
+                        else: # Fallback если все y_data это NaN (маловероятно здесь, т.к. есть dropna)
+                            b0 = (x_min + x_max) / 2.0
 
-                for idx, name in enumerate(current_param_names):
-                    std_err = 0.0
-                    ci_l, ci_u = params[idx], params[idx] # по умолчанию, если нет std_err
-                    if valid_covariance and np.diag(pcov)[idx] > 1e-9: # чтобы избежать деления на 0 или корень из малого числа
-                        std_err = np.sqrt(np.diag(pcov))[idx]
-                        ci_l = float(params[idx] - 1.96 * std_err)
-                        ci_u = float(params[idx] + 1.96 * std_err)
-                    else: # Если ковариация невалидна или диагональный элемент слишком мал
-                         logs.append(log_prefix + f"Warning: For {reg_type} model, coefficient '{name}', std_err could not be reliably estimated.")
+                        a0 = 1.0 # Начальное приближение для крутизны
+                        # Попробуем оценить крутизну, если есть разброс по X и Y
+                        if (x_max - x_min) > 1e-6 and (y_max - y_min) > 1e-6:
+                             # Эвристика: 4 / (ширина диапазона X, где происходит основной рост)
+                             # Предположим, что основной рост происходит на ~1/4 .. 3/4 диапазона Y
+                             try:
+                                 y_25 = y_min + 0.25 * (y_max - y_min)
+                                 y_75 = y_min + 0.75 * (y_max - y_min)
+                                 x_at_y25 = x_data[np.argmin(np.abs(y_data - y_25))]
+                                 x_at_y75 = x_data[np.argmin(np.abs(y_data - y_75))]
+                                 if abs(x_at_y75 - x_at_y25) > 1e-6:
+                                     a0 = 4 / abs(x_at_y75 - x_at_y25) # Чем круче, тем больше a
+                             except:
+                                 pass # Оставляем a0 = 1.0 если эвристика не сработала
 
+                        p0 = [a0, b0, c0]
+                        logs.append(log_prefix + f"Sigmoid p0: a={a0:.3g}, b={b0:.3g}, c={c0:.3g}")
+                        
+                        # Определение границ (bounds) для сигмоиды
+                        # c (y_max_param) должен быть больше или равен y_max, но может быть и чуть больше
+                        # если данные шумные. Но не меньше чем y_min.
+                        lower_c_bound = y_min 
+                        upper_c_bound = y_max
+                        if abs(y_max - y_min) < 1e-6: # если Y почти константа
+                            if abs(y_max) < 1e-6 : # если Y около нуля
+                                upper_c_bound = 1.0
+                                lower_c_bound = -1.0 if y_min < 0 else 0.0 # Позволим быть немного отрицательным, если y_min отрицателен
+                            else: # Y константа, но не ноль
+                                upper_c_bound = y_max * 1.1 if y_max > 0 else y_max * 0.9 # небольшой запас
+                                lower_c_bound = y_min * 0.9 if y_min > 0 else y_min * 1.1
+                        else: # Y варьируется
+                            padding_y = (y_max - y_min) * 0.1 # 10% запас
+                            upper_c_bound = y_max + padding_y
+                            # lower_c_bound уже y_min, что логично для асимптоты снизу, если она не 0
+                            # Если мы ожидаем, что сигмоида всегда начинается от 0 или положительного значения, то:
+                            # lower_c_bound = max(0, y_min - padding_y)
+                            lower_c_bound = y_min - padding_y # Позволим асимптоте быть чуть ниже min(y_data)
 
-                    coef = RegressionCoefficient(
-                        variable_name=name, coefficient=float(params[idx]),
-                        standard_error=float(std_err),
-                        t_statistic=0.0, p_value=0.0, # Не применимо напрямую из curve_fit
-                        ci_lower=ci_l, ci_upper=ci_u
-                    )
-                    coefficients_nl.append(coef)
+                        bounds = (
+                            [1e-9, x_min, lower_c_bound],       # lower bounds for a, b, c
+                            [np.inf, x_max, upper_c_bound]    # upper bounds for a, b, c
+                        )
+                        method_for_curve_fit = 'trf' # 'trf' обычно лучше работает с границами
+                        logs.append(log_prefix + f"Sigmoid bounds: a=({bounds[0][0]:.2g},{bounds[1][0]:.2g}), b=({bounds[0][1]:.2g},{bounds[1][1]:.2g}), c=({bounds[0][2]:.2g},{bounds[1][2]:.2g})")
+                        # Для сигмоиды также может потребоваться больше итераций
+                        current_maxfev = 20000 
 
-                regression_result_nl = RegressionData()
-                regression_result_nl.model_type = reg_type
-                regression_result_nl.dependent_variable = y_col_name
-                regression_result_nl.independent_variables = [x_col_name]
-                regression_result_nl.r_squared = float(r_squared)
-                regression_result_nl.adjusted_r_squared = float(r_squared) # Упрощение
-                regression_result_nl.f_statistic = 0.0
-                regression_result_nl.prob_f_statistic = 0.0
-                regression_result_nl.sse = float(sse)
-                regression_result_nl.coefficients = coefficients_nl
-                regression_result_nl.data_points = [
-                    {"x": float(xv), "y": float(yv)} for xv, yv in zip(x_data, y_data)
-                ]
-                all_models_for_pair.append(regression_result_nl)
-                logs.append(log_prefix + f"{reg_type} model fitted. R²={r_squared:.4f}, SSE={sse:.4f}")
+                    if reg_type in ["Power", "Logarithmic"] and np.any(x_data <= 1e-9):
+                        logs.append(log_prefix + f"Skipped {reg_type} model (non-positive values in X).")
+                        print(f"DEBUG: Skipped {reg_type} model (non-positive X).", file=sys.stderr) # Отладка
+                        continue
 
-            except RuntimeError: # Часто возникает, когда curve_fit не может сойтись
-                logs.append(log_prefix + f"Skipped {reg_type} model (RuntimeError: curve_fit could not find optimal parameters).")
-            except Exception as e:
-                logs.append(log_prefix + f"Skipped {reg_type} model (Error: {str(e)}).")
+                    print(f"DEBUG: Attempting to fit {reg_type} model with maxfev={current_maxfev}...", file=sys.stderr) # Отладка
+                    
+                    params, pcov = curve_fit(func, x_data, y_data, p0=p0, bounds=bounds, method=method_for_curve_fit, maxfev=current_maxfev, check_finite=True)
+                    
+                    print(f"DEBUG: Successfully fitted {reg_type}. pcov is None: {pcov is None}", file=sys.stderr) # Отладка
 
+                    if pcov is None:
+                        valid_covariance = False
+                        print(f"DEBUG: pcov is None for {reg_type}, setting valid_covariance=False", file=sys.stderr)
+                    else:
+                        try:
+                            diag_pcov = np.diag(pcov)
+                            valid_covariance = not np.any(np.isinf(pcov)) and np.all(diag_pcov >= 0)
+                            print(f"DEBUG: pcov for {reg_type} processed. valid_covariance={valid_covariance}", file=sys.stderr)
+                        except Exception as e_diag:
+                            valid_covariance = False
+                            print(f"DEBUG: Error processing pcov for {reg_type}: {e_diag}", file=sys.stderr)
+                    
+                    if not valid_covariance:
+                        logs.append(log_prefix + f"Warning: For {reg_type} model, covariance could not be reliably estimated or is invalid.")
+                        print(f"DEBUG: Covariance invalid for {reg_type}", file=sys.stderr) # Отладка
+
+                    y_pred = func(x_data, *params)
+                    r_squared = calculate_r_squared(y_data, y_pred)
+                    sse = calculate_sse(y_data, y_pred)
+                    print(f"DEBUG: {reg_type} R²={r_squared:.4f}", file=sys.stderr) # Отладка
+
+                    # Расчет Adjusted R-squared
+                    n_obs = len(y_data) # Количество наблюдений
+                    # n_params уже есть для каждой нелинейной модели (из regression_types)
+                    adj_r_squared_val = r_squared # По умолчанию, если расчет невозможен (например, если r_squared сам по себе некорректен)
+                    if n_obs > n_params + 1: # Условие для корректного расчета
+                        # Проверим, что r_squared это число, а не NaN, перед расчетом
+                        if isinstance(r_squared, (int, float)) and not np.isnan(r_squared):
+                            adj_r_squared_val = 1 - (1 - r_squared) * (n_obs - 1) / (n_obs - n_params - 1)
+                        else:
+                            logs.append(log_prefix + f"Warning: For {reg_type} model, R² is NaN or not a number. Adjusted R² cannot be calculated.")
+                            adj_r_squared_val = np.nan # Или другое значение по умолчанию для NaN R²
+                    else:
+                        logs.append(log_prefix + f"Warning: For {reg_type} model, Adjusted R² cannot be reliably calculated (n_obs={n_obs} <= n_params={n_params} + 1). Using R² or NaN instead.")
+                        # Если r_squared сам по себе NaN, то и adj_r_squared_val должен быть NaN
+                        if isinstance(r_squared, (int, float)) and not np.isnan(r_squared):
+                             adj_r_squared_val = r_squared # Используем обычный R² в этом крайнем случае, если он валиден
+                        else:
+                            adj_r_squared_val = np.nan
+                    
+                    # Исправленный отладочный print
+                    formatted_adj_r2 = f"{adj_r_squared_val:.4f}" if isinstance(adj_r_squared_val, float) and not np.isnan(adj_r_squared_val) else "NaN"
+                    print(f"DEBUG: {reg_type} Adjusted R²={formatted_adj_r2}", file=sys.stderr)
+
+                    coefficients_nl = []
+                    param_names_map = {
+                        "Power": ["a", "b"], "Logarithmic": ["a", "b"],
+                        "Quadratic": ["a", "b", "c"], "Trigonometric": ["a", "b", "c", "d"],
+                        "Sigmoid": ["a", "b", "c"]
+                    }
+                    current_param_names = param_names_map[reg_type]
+
+                    for idx, name in enumerate(current_param_names):
+                        std_err = 0.0
+                        ci_l, ci_u = params[idx], params[idx]
+                        # Добавлена проверка pcov is not None и длины diag
+                        if valid_covariance and pcov is not None and idx < len(np.diag(pcov)) and np.diag(pcov)[idx] >= 0:
+                            if np.diag(pcov)[idx] > 1e-9: 
+                                std_err = np.sqrt(np.diag(pcov))[idx]
+                                ci_l = float(params[idx] - 1.96 * std_err)
+                                ci_u = float(params[idx] + 1.96 * std_err)
+                            else:
+                                logs.append(log_prefix + f"Warning: For {reg_type} model, coefficient '{name}', diag(pcov)[{idx}] is too small or zero.")
+                        else:
+                            logs.append(log_prefix + f"Warning: For {reg_type} model, coefficient '{name}', std_err could not be reliably estimated (valid_covariance: {valid_covariance}, pcov is None: {pcov is None}).")
+                        
+                        coef = RegressionCoefficient(
+                            variable_name=name, coefficient=float(params[idx]),
+                            standard_error=float(std_err),
+                            t_statistic=0.0, p_value=0.0, 
+                            ci_lower=ci_l, ci_upper=ci_u
+                        )
+                        coefficients_nl.append(coef)
+
+                    regression_result_nl = RegressionData()
+                    regression_result_nl.model_type = reg_type
+                    regression_result_nl.dependent_variable = y_col_name
+                    regression_result_nl.independent_variables = [x_col_name]
+                    regression_result_nl.r_squared = float(r_squared) if isinstance(r_squared, (int, float)) and not np.isnan(r_squared) else 0.0 # Защита от NaN
+                    regression_result_nl.adjusted_r_squared = float(adj_r_squared_val) if isinstance(adj_r_squared_val, (int, float)) and not np.isnan(adj_r_squared_val) else 0.0 # Используем рассчитанное значение, защита от NaN
+                    regression_result_nl.f_statistic = 0.0
+                    regression_result_nl.prob_f_statistic = 0.0
+                    regression_result_nl.sse = float(sse)
+                    regression_result_nl.coefficients = coefficients_nl
+                    regression_result_nl.data_points = [
+                        {"x": float(xv), "y": float(yv)} for xv, yv in zip(x_data, y_data)
+                    ]
+                    all_models_for_pair.append(regression_result_nl)
+                    logs.append(log_prefix + f"{reg_type} model fitted. R²={r_squared:.4f}, SSE={sse:.4f}, Params={np.round(params, 3).tolist()}")
+                    print(f"DEBUG: Appended {reg_type} to results.", file=sys.stderr) # Отладка
+
+                except RuntimeError as rte: 
+                    logs.append(log_prefix + f"Skipped {reg_type} model (RuntimeError: {rte}).")
+                    print(f"DEBUG: RuntimeError for {reg_type}: {rte}", file=sys.stderr) # Отладка
+                except Exception as e_inner:
+                    import traceback
+                    error_traceback_inner = traceback.format_exc()
+                    logs.append(log_prefix + f"Skipped {reg_type} model due to unexpected error: {e_inner}. Traceback: {error_traceback_inner}")
+                    print(f"DEBUG: Inner Exception for {reg_type}: {e_inner}\nTRACEBACK:\n{error_traceback_inner}", file=sys.stderr) # Отладка
+        
+        except Exception as e_outer: # Внешний try-except
+            import traceback
+            error_traceback_outer = traceback.format_exc()
+            logs.append(log_prefix + f"Critical error during non-linear regression loop: {e_outer}. Traceback: {error_traceback_outer}")
+            print(f"DEBUG: Outer Exception: {e_outer}\nTRACEBACK:\n{error_traceback_outer}", file=sys.stderr) # Отладка
 
         # Резервная линейная регрессия через curve_fit, если OLS не удалась
         # и если линейная модель еще не была добавлена (например, если OLS выбросил исключение)
@@ -331,7 +580,6 @@ def perform_simple_linear_regression(df: pd.DataFrame, dependent_var: str = None
                 # Если в OLS было const, X1, то тут тоже сделаем const, X1
                 # Пересортируем coefficients_lin_cf, чтобы 'const' был первым, если есть
                 coefficients_lin_cf.sort(key=lambda c: 0 if c.variable_name == "const" else 1)
-
 
                 regression_result_lin_cf = RegressionData()
                 regression_result_lin_cf.model_type = "Linear" # Отмечаем, что это линейная

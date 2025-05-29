@@ -618,7 +618,7 @@ type NormalityTestResult struct {
 	TestName      string                 `protobuf:"bytes,2,opt,name=test_name,json=testName,proto3" json:"test_name,omitempty"`       // например, "Shapiro-Wilk"
 	Statistic     float64                `protobuf:"fixed64,3,opt,name=statistic,proto3" json:"statistic,omitempty"`
 	PValue        float64                `protobuf:"fixed64,4,opt,name=p_value,json=pValue,proto3" json:"p_value,omitempty"`
-	IsNormal      bool                   `protobuf:"varint,5,opt,name=is_normal,json=isNormal,proto3" json:"is_normal,omitempty"` // Новое поле (вместо conclusion)
+	IsNormal      bool                   `protobuf:"varint,5,opt,name=is_normal,json=isNormal,proto3" json:"is_normal,omitempty"` // Возвращаем тег на 5
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
