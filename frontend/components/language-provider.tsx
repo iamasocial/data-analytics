@@ -57,16 +57,16 @@ const translations: Translations = {
     en: "Supported formats: CSV, XLSX, JSON",
   },
   maxFileSize: {
-    ru: "Максимальный размер файла: 200 МБ",
-    en: "Maximum file size: 200 MB",
+    ru: "Максимальный размер файла: 4 МБ",
+    en: "Maximum file size: 4 MB",
   },
   uploadSuccess: {
-    ru: "Файл успешно загружен",
-    en: "File uploaded successfully",
+    ru: "Загрузка прошла успешно",
+    en: "Upload Successful",
   },
   uploadError: {
     ru: "Ошибка при загрузке файла",
-    en: "Error uploading file",
+    en: "Upload Error",
   },
   exportResults: {
     ru: "Экспорт результатов",

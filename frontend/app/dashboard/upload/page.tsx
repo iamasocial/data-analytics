@@ -218,17 +218,52 @@ export default function UploadPage() {
   const [globalYDomain, setGlobalYDomain] = useState<[number, number] | undefined>(undefined);
   const [selectedModelType, setSelectedModelType] = useState<string | undefined>(undefined);
 
+  useEffect(() => {
+    if (fileColumns.length >= 2) {
+      // Автоматически ставим галочку "Регрессия", если есть 2+ колонки
+      setSelectedAnalysesOptions(prev => ({ ...prev, regression: true }));
+
+      // Ищем 'x' и 'y' (в любом регистре)
+      const xCol = fileColumns.find(col => col.toLowerCase() === 'x');
+      const yCol = fileColumns.find(col => col.toLowerCase() === 'y');
+
+      if (xCol && yCol) {
+        // Устанавливаем, если они еще не установлены или если выбраны другие
+        // Это предотвратит сброс выбора пользователя, если он уже что-то выбрал вручную
+        // для текущего набора колонок
+        if (!independentVariable || !fileColumns.includes(independentVariable)) {
+          setIndependentVariable(xCol);
+        }
+        if (!dependentVariable || !fileColumns.includes(dependentVariable)) {
+          setDependentVariable(yCol);
+        }
+      } else if (fileColumns.length >= 2) {
+        // Если 'x' и 'y' не найдены, но есть 2+ колонки,
+        // и переменные еще не выбраны (или их выбор стал невалидным),
+        // выбираем первые две как независимую и зависимую по умолчанию
+        // Это поведение можно настроить или убрать, если нежелательно
+        if (!independentVariable || !fileColumns.includes(independentVariable)) {
+          setIndependentVariable(fileColumns[0]);
+        }
+        if (!dependentVariable || !fileColumns.includes(dependentVariable) && fileColumns[1] !== (independentVariable || fileColumns[0])) {
+          // Убедимся, что не выбираем ту же колонку, что и для independentVariable
+          setDependentVariable(fileColumns[1]); 
+        }
+      }
+    }
+  }, [fileColumns]); // Запускаем эффект при изменении fileColumns
+
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
-      // Проверка размера файла (200 МБ = 200 * 1024 * 1024 байт)
-      const maxSize = 200 * 1024 * 1024
+      // Проверка размера файла (4 МБ = 4 * 1024 * 1024 байт)
+      const maxSize = 4 * 1024 * 1024;
       const validFiles = acceptedFiles.filter((file) => {
         if (file.size > maxSize) {
           toast({
             title: "Файл слишком большой",
-            description: `Файл "${file.name}" превышает максимальный размер в 200 МБ`,
-          })
-          return false
+            description: `Файл "${file.name}" превышает максимальный размер в 4 МБ`,
+          });
+          return false;
         }
 
         // Проверка типа файла
@@ -244,12 +279,20 @@ export default function UploadPage() {
         return true
       })
 
-      setFiles((prev) => [...prev, ...validFiles])
+      // Заменяем текущий файл на новый (или первый из новых, если их несколько)
+      // Это гарантирует, что работаем всегда с последним выбранным файлом
+      setFiles(validFiles.slice(0, 1)); 
       
       // Clear previous columns and variable selections when new file is dropped
+      // and also clear previous analysis results and related state
       setFileColumns([])
       setDependentVariable("")
       setIndependentVariable("")
+      setAnalysisResult(null)
+      setSelectedRegressionType("")
+      setSelectedModelType(undefined)
+      setUploadStatus("idle")
+      setUploadProgress(0)
     },
     [toast],
   )
