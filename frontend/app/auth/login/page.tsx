@@ -42,20 +42,54 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      // Имитация API запроса
-      await new Promise((resolve) => setTimeout(resolve, 1500))
+      const response = await fetch("http://localhost:8080/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: data.email,
+          password: data.password,
+        }),
+      });
 
-      // Успешный вход
+      if (!response.ok) {
+        const errorData = await response.json();
+        // Попытка получить сообщение об ошибке от сервера, если оно есть
+        // или стандартное сообщение, если тело ответа не JSON или пустое
+        let errorMessage = "Login failed";
+        try {
+            const parsedError = await response.json();
+            errorMessage = parsedError.error || JSON.stringify(parsedError);
+        } catch (e) {
+            // Если тело ответа не JSON или произошла другая ошибка парсинга
+            const textError = await response.text(); 
+            errorMessage = textError || `HTTP error ${response.status}`;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const responseData = await response.json();
+      // TODO: Сохранить токен (responseData.token) в localStorage или Zustand/Context
+      // console.log("Login successful, token:", responseData.token);
+      if (responseData.token) {
+        localStorage.setItem("authToken", responseData.token);
+        console.log("Login successful, token saved to localStorage:", responseData.token);
+      } else {
+        console.error("Login successful, but no token received from server.");
+        throw new Error("No token received from server after login.");
+      }
+
       toast({
         title: "Вход выполнен",
         description: "Вы успешно вошли в систему",
       })
 
-      router.push("/dashboard")
+      router.push("/dashboard") // Перенаправляем на дашборд после успешного входа
     } catch (error) {
       toast({
         title: "Ошибка входа",
-        description: "Неверный email или пароль. Пожалуйста, попробуйте снова.",
+        description: error instanceof Error ? error.message : "Произошла непредвиденная ошибка. Пожалуйста, попробуйте снова.",
         variant: "destructive",
       })
     } finally {

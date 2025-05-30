@@ -57,8 +57,22 @@ export default function RegisterPage() {
     setIsLoading(true)
 
     try {
-      // Имитация API запроса
-      await new Promise((resolve) => setTimeout(resolve, 1500))
+      // Заменяем имитацию на реальный API запрос
+      const response = await fetch("http://localhost:8080/api/auth/register", { // Используем ПОЛНЫЙ путь к Go серверу
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: data.email,
+          password: data.password,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Registration failed");
+      }
 
       // Успешная регистрация
       toast({
@@ -70,7 +84,7 @@ export default function RegisterPage() {
     } catch (error) {
       toast({
         title: "Ошибка регистрации",
-        description: "Произошла ошибка при регистрации. Пожалуйста, попробуйте снова.",
+        description: error instanceof Error ? error.message : "Произошла ошибка при регистрации. Пожалуйста, попробуйте снова.",
         variant: "destructive",
       })
     } finally {

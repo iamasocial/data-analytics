@@ -31,15 +31,16 @@ func NewAnalysisHandler(service services.AnalysisService) *AnalysisHandler {
 // RegisterRoutes регистрирует маршруты для обработчика в Gin роутере.
 func (h *AnalysisHandler) RegisterRoutes(router *gin.Engine) {
 	// Группа маршрутов API (опционально)
-	api := router.Group("/api")
-	{
-		api.POST("/analyze", h.handleAnalyzeData) // POST /api/analyze
-		api.POST("/columns", h.handleGetColumns)  // POST /api/columns
-	}
+	// Эти маршруты теперь регистрируются в cmd/main.go с использованием middleware
+	// api := router.Group("/api")
+	// {
+	// 	api.POST("/analyze", h.HandleAnalyzeData) // POST /api/analyze
+	// 	api.POST("/columns", h.HandleGetColumns)  // POST /api/columns
+	// }
 }
 
-// handleAnalyzeData обрабатывает запрос на анализ данных (POST /api/analyze).
-func (h *AnalysisHandler) handleAnalyzeData(c *gin.Context) {
+// HandleAnalyzeData обрабатывает запрос на анализ данных (POST /api/analyze).
+func (h *AnalysisHandler) HandleAnalyzeData(c *gin.Context) {
 	log.Println("Handler: Received /api/analyze request")
 
 	if h.service == nil {
@@ -167,8 +168,8 @@ func (h *AnalysisHandler) handleAnalyzeData(c *gin.Context) {
 	c.Data(http.StatusOK, "application/json; charset=utf-8", jsonBytes)
 }
 
-// handleGetColumns обрабатывает запрос на получение списка столбцов файла (POST /api/columns).
-func (h *AnalysisHandler) handleGetColumns(c *gin.Context) {
+// HandleGetColumns обрабатывает запрос на получение списка колонок (POST /api/columns)
+func (h *AnalysisHandler) HandleGetColumns(c *gin.Context) {
 	log.Println("Handler: Received /api/columns request")
 
 	if h.service == nil {

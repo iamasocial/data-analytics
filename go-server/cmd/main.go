@@ -2,15 +2,19 @@ package main
 
 import (
 	"context"
-	"diploma/go-server/internal/adapter"  // Путь к адаптеру
-	"diploma/go-server/internal/handlers" // Путь к хэндлеру
-	"diploma/go-server/internal/server"   // Путь к нашему новому серверу
-	"diploma/go-server/internal/services" // Путь к сервису
+	"diploma/go-server/internal/adapter"    // Путь к адаптеру
+	"diploma/go-server/internal/database"   // <--- Добавлен импорт БД
+	"diploma/go-server/internal/handlers"   // Путь к хэндлеру
+	"diploma/go-server/internal/middleware" // <--- Добавлен импорт middleware
+	"diploma/go-server/internal/repository" // <--- Добавлен импорт репозитория
+	"diploma/go-server/internal/server"     // Путь к нашему новому серверу
+	"diploma/go-server/internal/services"   // Путь к сервису
 	"log"
 
 	// "net/http" // Больше не нужен здесь напрямую
 	"os"
 	"os/signal"
+	"strconv" // <--- Добавлен импорт для преобразования строки в число
 	"syscall"
 	"time"
 
@@ -19,8 +23,11 @@ import (
 )
 
 const (
-	defaultPythonServerAddress = "localhost:9000" // Адрес Python gRPC сервера по умолчанию (изменено с 50051 на 9000)
-	defaultGoServerPort        = "8080"           // Порт Go HTTP сервера по умолчанию
+	defaultPythonServerAddress = "localhost:9000"                             // Адрес Python gRPC сервера по умолчанию (изменено с 50051 на 9000)
+	defaultGoServerPort        = "8080"                                       // Порт Go HTTP сервера по умолчанию
+	defaultJWTSecret           = "your-super-secret-jwt-key-please-change-it" // Секретный ключ JWT по умолчанию
+	defaultJWTTokenTTLMinutes  = "60"                                         // Время жизни JWT токена в минутах по умолчанию
+
 	// ВАЖНО: Укажите правильный путь к директории сборки вашего React приложения
 	// staticFilesPath = "./frontend/out"
 )
@@ -28,9 +35,29 @@ const (
 func main() {
 	log.Println("Starting Go application...")
 
+	// --- Подключение к базе данных ---
+	db, errDb := database.ConnectDB()
+	if errDb != nil {
+		log.Fatalf("Failed to connect to database: %v", errDb)
+	}
+	defer func() {
+		log.Println("Closing database connection...")
+		if errClose := db.Close(); errClose != nil {
+			log.Printf("Error closing database connection: %v", errClose)
+		}
+	}()
+
 	// --- Конфигурация ---
 	pythonServerAddr := getEnv("PYTHON_SERVER_ADDR", defaultPythonServerAddress)
 	goServerPort := getEnv("GO_SERVER_PORT", defaultGoServerPort)
+	jwtSecret := getEnv("JWT_SECRET_KEY", defaultJWTSecret)
+	jtwTokenTTLStr := getEnv("JWT_TOKEN_TTL_MINUTES", defaultJWTTokenTTLMinutes)
+
+	jwtTokenTTLMinutes, err := strconv.Atoi(jtwTokenTTLStr)
+	if err != nil {
+		log.Printf("Invalid JWT_TOKEN_TTL_MINUTES value: %s. Using default value: %s minutes", jtwTokenTTLStr, defaultJWTTokenTTLMinutes)
+		jwtTokenTTLMinutes, _ = strconv.Atoi(defaultJWTTokenTTLMinutes) // Используем значение по умолчанию
+	}
 
 	// --- Инициализация зависимостей ---
 	_, cancel := context.WithCancel(context.Background()) // Контекст для отмены операций при завершении
@@ -55,6 +82,15 @@ func main() {
 	// Создаем хэндлер
 	analysisHandler := handlers.NewAnalysisHandler(analysisService)
 
+	// --- Инициализация репозитория пользователя ---
+	userRepository := repository.NewPostgresUserRepository(db)
+
+	// --- Инициализация сервиса аутентификации ---
+	authService := services.NewAuthService(userRepository, jwtSecret, jwtTokenTTLMinutes)
+
+	// --- Инициализация хэндлера аутентификации ---
+	authHandler := handlers.NewAuthHandler(authService)
+
 	// --- Настройка HTTP сервера (Gin) ---
 	router := gin.Default()
 
@@ -68,7 +104,18 @@ func main() {
 	router.Use(cors.New(config))
 
 	// Регистрация маршрутов API
-	analysisHandler.RegisterRoutes(router)
+	// analysisHandler.RegisterRoutes(router) // <--- Старая регистрация
+	authHandler.RegisterRoutes(router) // <--- Регистрация маршрутов аутентификации
+
+	// --- Защищенные маршруты API ---
+	apiProtected := router.Group("/api")
+	apiProtected.Use(middleware.AuthMiddleware(jwtSecret, authService)) // <--- Применяем middleware
+	{
+		// Маршруты, требующие аутентификации
+		// Вместо analysisHandler.RegisterRoutes(router) делаем так:
+		apiProtected.POST("/analyze", analysisHandler.HandleAnalyzeData) // Используем метод хендлера напрямую
+		apiProtected.POST("/columns", analysisHandler.HandleGetColumns)  // Используем метод хендлера напрямую
+	}
 
 	// --- Отдача статических файлов React ---
 	// Используем middleware static.Serve для отдачи файлов из staticFilesPath
@@ -89,7 +136,8 @@ func main() {
 
 	log.Printf("Go application running. HTTP server (API only) listening on %s", serverAddr)
 	// log.Printf("Serving static files from: %s", staticFilesPath)
-	log.Printf("API endpoint available at POST /api/analyze")
+	log.Printf("Protected API endpoints available at POST /api/analyze and POST /api/columns") // <--- Новое сообщение
+	log.Printf("Auth endpoints available at POST /api/auth/register and POST /api/auth/login") // <--- Добавлено сообщение о маршрутах аутентификации
 	log.Printf("Connecting to Python gRPC server at %s", pythonServerAddr)
 
 	// --- Грациозное завершение ---

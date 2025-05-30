@@ -349,162 +349,197 @@ export default function UploadPage() {
   // Function to fetch column names from the uploaded file
   const fetchColumnNames = async () => {
     if (files.length === 0) return;
-    
+    const file = files[0];
+    const formData = new FormData();
+    formData.append("file", file);
+
+    setUploadStatus("uploading");
+    setUploadProgress(0);
+
     try {
-      const formData = new FormData();
-      formData.append('file', files[0]);
-      
-      const response = await fetch('http://localhost:8080/api/columns', {
-        method: 'POST',
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        toast({
+          title: "Ошибка аутентификации",
+          description: "Токен не найден. Пожалуйста, войдите снова.",
+          variant: "destructive",
+        });
+        setUploadStatus("error");
+        router.push("/auth/login");
+        return;
+      }
+
+      const response = await fetch("http://localhost:8080/api/columns", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
         body: formData,
       });
-      
+
+      setUploadProgress(100); // Indicate completion of this step
+
       if (!response.ok) {
-        throw new Error(`Error fetching columns: ${response.status}`);
+        const errorData = await response.json().catch(() => ({ error: "Failed to parse error from /api/columns" }));
+        throw new Error(errorData.error || `Server error: ${response.status}`);
       }
-      
-      const result = await response.json();
-      if (result.columns && Array.isArray(result.columns)) {
-        setFileColumns(result.columns);
+
+      const data = await response.json();
+      setFileColumns(data.columns || []);
+      setUploadStatus("idle"); // Or a success status for column fetching
+      if ((data.columns || []).length > 0 && files.length > 0) {
+          // Only auto-select if columns were actually fetched
+        setSelectedAnalysesOptions(prev => ({ ...prev, regression: (data.columns || []).length >= 2 }));
       }
+
     } catch (error) {
-      console.error("Failed to fetch columns:", error);
+      console.error("Error fetching column names:", error);
       toast({
-        title: "Ошибка получения столбцов",
-        description: "Не удалось получить список столбцов файла.",
+        title: "Ошибка при загрузке колонок",
+        description: error instanceof Error ? error.message : "Не удалось получить список колонок из файла.",
+        variant: "destructive",
       });
+      setUploadStatus("error");
+      setFileColumns([]); // Clear columns on error
     }
   };
-  
-  // Call fetchColumnNames when a file is selected
+
   useEffect(() => {
     if (files.length > 0) {
       fetchColumnNames();
     }
-  }, [files]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [files]); // Re-fetch columns when files change
 
   const handleUpload = async () => {
-    if (files.length === 0) return
+    if (files.length === 0) {
+      toast({
+        title: "Файл не выбран",
+        description: "Пожалуйста, выберите файл для анализа.",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    // Validate regression selections if regression is selected
+    const selectedOptions = Object.entries(selectedAnalysesOptions)
+      .filter(([_, value]) => value)
+      .map(([key]) => key);
+
+    if (selectedOptions.length === 0) {
+      toast({
+        title: "Анализы не выбраны",
+        description: "Пожалуйста, выберите хотя бы один тип анализа.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", files[0]);
+    selectedOptions.forEach(option => {
+      formData.append("selected_analyses", option);
+    });
+
     if (selectedAnalysesOptions.regression) {
       if (!dependentVariable || !independentVariable) {
         toast({
-          title: "Отсутствуют переменные для регрессии",
-          description: "Пожалуйста, выберите зависимую и независимую переменные для регрессионного анализа.",
+          title: "Переменные для регрессии не выбраны",
+          description: "Пожалуйста, выберите зависимую и независимую переменные.",
+          variant: "destructive",
         });
         return;
       }
-      
       if (dependentVariable === independentVariable) {
         toast({
           title: "Некорректный выбор переменных",
-          description: "Зависимая и независимая переменные должны отличаться.",
+           description: "Зависимая и независимая переменные должны отличаться.",
+           variant: "destructive",
         });
         return;
       }
+      formData.append("dependent_variable", dependentVariable);
+      formData.append("independent_variable", independentVariable);
     }
 
-    setUploading(true)
-    setUploadStatus("idle")
-    setAnalysisResult(null)
-    setUploadStatus("uploading")
-    setUploadProgress(0)
-
-    // Имитация загрузки с прогрессом - оставляем для визуализации
-    const interval = setInterval(() => {
-      setUploadProgress((prev) => {
-        // Остановим имитацию прогресса, если достигли 95% до ответа сервера
-        if (prev >= 95) {
-          // clearInterval(interval); // Не останавливаем интервал здесь
-          return prev; // Держим 95% пока нет ответа
-        }
-        return prev + 5;
-      })
-    }, 200);
-
-    const fileToUpload = files[0]; // <<-- Пока отправляем только первый файл
+    setUploading(true);
+    setUploadStatus("uploading");
+    setUploadProgress(0);
+    setAnalysisResult(null);
 
     try {
-      const formData = new FormData();
-      formData.append('file', fileToUpload); // \'file\' - имя поля, которое ожидает Go
-
-      // Add selected analyses to FormData
-      const analysesToPerform = Object.entries(selectedAnalysesOptions)
-        .filter(([_,isSelected]) => isSelected)
-        .map(([key,_]) => key);
-
-      if (analysesToPerform.length === 0) {
+      const token = localStorage.getItem("authToken");
+      if (!token) {
         toast({
-          title: t("noAnalysesSelectedTitle"),
-          description: t("noAnalysesSelectedDesc"),
+          title: "Ошибка аутентификации",
+          description: "Токен не найден. Пожалуйста, войдите снова.",
+          variant: "destructive",
         });
         setUploading(false);
-        clearInterval(interval);
-        setUploadStatus("idle");
+        setUploadStatus("error");
+        router.push("/auth/login");
         return;
       }
-      
-      analysesToPerform.forEach(analysis => {
-        formData.append('selected_analyses', analysis);
-      });
-      
-      // Add regression variables if regression analysis is selected
-      if (selectedAnalysesOptions.regression) {
-        formData.append('dependent_variable', dependentVariable);
-        formData.append('independent_variable', independentVariable);
-      }
 
-      const response = await fetch('http://localhost:8080/api/analyze', { // <<-- URL Go API
-        method: 'POST',
+      let progress = 0;
+      const interval = setInterval(() => {
+        progress += 10;
+        if (progress <= 90) {
+          setUploadProgress(progress);
+        } else {
+          clearInterval(interval); // Stop at 90 to prevent reaching 100 before server responds
+        }
+      }, 200);
+
+      const response = await fetch("http://localhost:8080/api/analyze", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
         body: formData,
       });
 
-      clearInterval(interval); // Останавливаем имитацию прогресса
-      setUploadProgress(100); // Устанавливаем прогресс на 100
+      clearInterval(interval); // Clear interval once response is received
 
       if (!response.ok) {
-        let errorMsg = `API Error: ${response.status}`;
-        try {
-           const errorData = await response.json();
-           errorMsg += ` - ${errorData.error || JSON.stringify(errorData)}`;
-        } catch (jsonError) {
-            errorMsg += ` - ${await response.text()}`;
-        }
-        console.error(errorMsg);
-        throw new Error(errorMsg); // Передаем ошибку в catch блок
+        setUploadProgress(0); // Reset progress on error
+        setUploadStatus("error");
+        setUploading(false);
+        const errorData = await response.json().catch(() => ({ error: "Failed to parse error from /api/analyze" }));
+        toast({
+          title: "Ошибка анализа",
+          description: errorData.error || `Server error: ${response.status}`,
+          variant: "destructive",
+        });
+        return;
       }
 
-      const result = await response.json();
-      console.log('Analysis Result:', result);
-      setAnalysisResult(result);
+      const results = await response.json();
+      setAnalysisResult(results);
+      setUploadProgress(100);
       setUploadStatus("success");
-
       toast({
-        title: t("uploadSuccess"),
-        description: "Анализ успешно завершен.", // Можно обновить сообщение
+        title: "Анализ завершен",
+        description: "Результаты анализа успешно загружены.",
+        variant: "default", // Or "success" if you have such variant
       });
 
     } catch (error) {
-      clearInterval(interval);
+      // clearInterval(interval); // Ensure interval is cleared in case of network error before fetch
+      console.error("Upload error:", error);
+      setUploading(false);
       setUploadStatus("error");
-      setUploadProgress(0); // Сбрасываем прогресс при ошибке
-      setAnalysisResult(null);
-      console.error("Upload failed:", error);
-
+      setUploadProgress(0);
       toast({
-        title: t("uploadError"),
-        description: error instanceof Error ? error.message : "Произошла ошибка при отправке или анализе файла.",
+        title: "Ошибка при загрузке",
+        description: error instanceof Error ? error.message : "Произошла ошибка при отправке файла на анализ.",
+        variant: "destructive",
       });
-      // Разблокируем кнопку после ошибки через некоторое время
-      setTimeout(() => { setUploading(false); }, 500);
     } finally {
-       // Разблокируем кнопку и здесь, если не было ошибки
-       if (uploadStatus !== 'error') {
-           setTimeout(() => { setUploading(false); }, 500); // Разблокируем после небольшого таймаута
-       }
+      setUploading(false);
+      // The interval should be cleared within the try or catch block, 
+      // not necessarily here, as it might not have been set if an early return occurred.
     }
-  }
+  };
 
   // Effect to calculate global Y domain for regression charts
   useEffect(() => {
@@ -985,7 +1020,7 @@ export default function UploadPage() {
                       if (!regressionAnalysis) return null;
 
                       // Сортировка моделей для выбора лучшей и для отображения в таблице
-                      const sortedModels = [...regressionAnalysis.models].sort((a, b) => {
+                                    const sortedModels = [...regressionAnalysis.models].sort((a, b) => {
                         const adjR2A = typeof a.adjusted_r_squared === 'number' && !isNaN(a.adjusted_r_squared) ? a.adjusted_r_squared : -Infinity;
                         const adjR2B = typeof b.adjusted_r_squared === 'number' && !isNaN(b.adjusted_r_squared) ? b.adjusted_r_squared : -Infinity;
                         
@@ -1030,23 +1065,23 @@ export default function UploadPage() {
                         if (selectedModelType) {
                           setTimeout(() => setSelectedModelType(undefined), 0);
                         }
-                      }
-
-                      return (
-                        <>
+                                    }
+                                    
+                                    return (
+                                      <>
                           {/* Переключатели моделей (табы) */}
                           {sortedModels.length > 0 && (
                             <div className="mb-4 flex flex-wrap gap-2">
                               {sortedModels.map((model) => (
-                                <Button
-                                  key={`btn-${model.regression_type}`}
+                                          <Button
+                                            key={`btn-${model.regression_type}`}
                                   variant={model.regression_type === (modelForDisplay?.regression_type) ? "default" : "outline"}
-                                  size="sm"
+                                            size="sm"
                                   onClick={() => setSelectedModelType(model.regression_type)}
-                                >
-                                  {regressionTypeTranslations[model.regression_type] || model.regression_type}
-                                </Button>
-                              ))}
+                                          >
+                                            {regressionTypeTranslations[model.regression_type] || model.regression_type}
+                                          </Button>
+                                        ))}
                             </div>
                           )}
 
@@ -1059,34 +1094,34 @@ export default function UploadPage() {
                                   {formatRegressionEquation(modelForDisplay, regressionAnalysis.dependent_variable, regressionAnalysis.independent_variables[0] || "x")}
                                 </p>
                               </div>
-                              <RegressionChart
-                                data={regressionAnalysis.data_points}
+                                                <RegressionChart 
+                                                  data={regressionAnalysis.data_points}
                                 models={[{ 
                                   type: modelForDisplay.regression_type, 
                                   coefficients: modelForDisplay.coefficients, 
                                   r_squared: modelForDisplay.r_squared 
                                 }]}
-                                dependentVar={regressionAnalysis.dependent_variable}
+                                                  dependentVar={regressionAnalysis.dependent_variable}
                                 independentVar={regressionAnalysis.independent_variables[0] || "x"}
-                                globalYDomain={globalYDomain}
-                              />
-                            </div>
-                          )}
+                                                  globalYDomain={globalYDomain}
+                                                />
+                      </div>
+                    )}
 
                           {/* Таблица сравнения моделей */} 
                           {sortedModels.length > 0 && (
-                            <div className="mt-6">
+                          <div className="mt-6">
                               <h3 className="text-lg font-semibold mb-2">Сравнение моделей регрессии</h3>
-                              <Table>
-                                <TableHeader>
-                                  <TableRow>
-                                    <TableHead>Тип модели</TableHead>
+                     <Table>
+                      <TableHeader>
+                        <TableRow>
+                                  <TableHead>Тип модели</TableHead>
                                     <TableHead className="text-right">R²</TableHead>
                                     <TableHead className="text-right">Скорр. R²</TableHead>
                                     <TableHead className="text-right">SSE</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                                   {sortedModels.map((model) => (
                                     <TableRow key={model.regression_type}>
                                       <TableCell>{regressionTypeTranslations[model.regression_type] || model.regression_type}</TableCell>
@@ -1097,11 +1132,11 @@ export default function UploadPage() {
                                       <TableCell className="text-right">
                                         {typeof model.sse === 'number' ? formatNumber(model.sse, 3) : "N/A"}
                                       </TableCell>
-                                    </TableRow>
+                          </TableRow>
                                   ))}
-                                </TableBody>
-                              </Table>
-                            </div>
+                      </TableBody>
+                    </Table>
+                              </div>
                           )}
                         </>
                       );
