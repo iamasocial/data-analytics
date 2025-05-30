@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  postgres_db:
+    image: postgres:15
+    container_name: diploma_postgres
+    environment:
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: apppassword # Используйте более надежный пароль для production
+      POSTGRES_DB: analysis_app_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data: 
