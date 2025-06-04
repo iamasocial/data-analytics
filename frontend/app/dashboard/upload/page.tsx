@@ -35,6 +35,22 @@ interface RegressionCoefficient {
   confidence_interval_upper?: number;
 }
 
+interface ResidualsAnalysisData {
+  shapiro_test?: {
+    statistic: number;
+    p_value: number;
+    is_normal: boolean;
+  };
+  histogram?: {
+    bins: number[];
+    frequencies: number[];
+  };
+  qq_plot?: {
+    theoretical_quantiles: number[];
+    sample_quantiles: number[];
+  };
+}
+
 interface RegressionModel {
   regression_type: string;
   r_squared: number;
@@ -43,6 +59,8 @@ interface RegressionModel {
   prob_f_statistic?: number;
   sse?: number;
   coefficients: RegressionCoefficient[];
+  residuals?: number[];
+  residuals_analysis?: ResidualsAnalysisData;
 }
 
 interface DataPoint {
@@ -1099,13 +1117,58 @@ export default function UploadPage() {
                                 models={[{ 
                                   type: modelForDisplay.regression_type, 
                                   coefficients: modelForDisplay.coefficients, 
-                                  r_squared: modelForDisplay.r_squared 
+                                  r_squared: modelForDisplay.r_squared,
+                                  residuals: modelForDisplay.residuals,
+                                  residuals_analysis: modelForDisplay.residuals_analysis
                                 }]}
                                                   dependentVar={regressionAnalysis.dependent_variable}
                                 independentVar={regressionAnalysis.independent_variables[0] || "x"}
                                                   globalYDomain={globalYDomain}
                                                 />
                       </div>
+                    )}
+
+                    {/* Новая секция для деталей выбранной модели (modelForDisplay) */} 
+                    {modelForDisplay && (
+                        <div key={`model-details-summary-${modelForDisplay.regression_type}`} className="mt-6 w-full border rounded-lg p-2 md:p-4 bg-white shadow-sm">
+                            <h3 className="text-lg font-semibold mb-3">Сводка по модели: {regressionTypeTranslations[modelForDisplay.regression_type] || modelForDisplay.regression_type}</h3>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Переменная</TableHead>
+                                        <TableHead>Коэффициент</TableHead>
+                                        {!(modelForDisplay.regression_type === "Trigonometric" || modelForDisplay.regression_type === "Sigmoid") && (
+                                            <>
+                                                <TableHead>Стд. ошибка</TableHead>
+                                                <TableHead>t-статистика</TableHead>
+                                                <TableHead>p-значение</TableHead>
+                                                <TableHead>Доверительный интервал</TableHead>
+                                            </>
+                                        )}
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {modelForDisplay.coefficients.map((coef, coefIndex) => (
+                                        <TableRow key={`coef-${modelForDisplay.regression_type}-${coefIndex}-${coef.variable_name}`}>
+                                            <TableCell>{coef.variable_name === "const" ? t("intercept") : coef.variable_name}</TableCell>
+                                            <TableCell>{formatNumber(coef.coefficient)}</TableCell>
+                                            {!(modelForDisplay.regression_type === "Trigonometric" || modelForDisplay.regression_type === "Sigmoid") && (
+                                                <>
+                                                    <TableCell>{typeof coef.std_error === 'number' ? formatNumber(coef.std_error) : "N/A"}</TableCell>
+                                                    <TableCell>{typeof coef.t_statistic === 'number' ? formatNumber(coef.t_statistic) : "N/A"}</TableCell>
+                                                    <TableCell>{typeof coef.p_value === 'number' ? coef.p_value.toExponential(10) : "N/A"}</TableCell>
+                                                    <TableCell>
+                                                        {typeof coef.confidence_interval_lower === 'number' && typeof coef.confidence_interval_upper === 'number'
+                                                        ? `[${formatNumber(coef.confidence_interval_lower)}, ${formatNumber(coef.confidence_interval_upper)}]`
+                                                        : "N/A"}
+                                                    </TableCell>
+                                                </>
+                                            )}
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
                     )}
 
                           {/* Таблица сравнения моделей */} 
@@ -1116,8 +1179,9 @@ export default function UploadPage() {
                       <TableHeader>
                         <TableRow>
                                   <TableHead>Тип модели</TableHead>
-                                    <TableHead className="text-right">R²</TableHead>
+                                                                            <TableHead className="text-right">R²</TableHead>
                                     <TableHead className="text-right">Скорр. R²</TableHead>
+                                    <TableHead className="text-right">F-статистика</TableHead>
                                     <TableHead className="text-right">SSE</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -1128,6 +1192,13 @@ export default function UploadPage() {
                                       <TableCell className="text-right">{formatNumber(model.r_squared, 3)}</TableCell>
                                       <TableCell className="text-right">
                                         {typeof model.adjusted_r_squared === 'number' ? formatNumber(model.adjusted_r_squared, 3) : "N/A"}
+                                      </TableCell>
+                                      <TableCell className="text-right">
+                                        {model.regression_type === "Trigonometric" || model.regression_type === "Sigmoid" 
+                                          ? "Не применимо" 
+                                          : (typeof model.f_statistic === 'number' 
+                                            ? `${formatNumber(model.f_statistic, 2)}` 
+                                            : "N/A")}
                                       </TableCell>
                                       <TableCell className="text-right">
                                         {typeof model.sse === 'number' ? formatNumber(model.sse, 3) : "N/A"}

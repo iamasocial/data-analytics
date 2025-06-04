@@ -54,7 +54,8 @@ class RegressionAdapter(RegressionPort):
                 "f_p_value": reg_result.prob_f_statistic,  # Обратите внимание на имя поля
                 "sse": reg_result.sse,  # Добавляем SSE
                 "coefficients": coef_dicts,
-                "data_points": reg_result.data_points  # Добавляем точки данных
+                "data_points": reg_result.data_points,  # Добавляем точки данных
+                "residuals": reg_result.residuals  # Добавляем остатки регрессии
             }
             result_dicts.append(result_dict)
         

@@ -80,6 +80,22 @@ interface RegressionCoefficient {
   confidenceIntervalUpper?: number;
 }
 
+interface ResidualsAnalysisData {
+  shapiro_test?: {
+    statistic: number;
+    p_value: number;
+    is_normal: boolean;
+  };
+  histogram?: {
+    bins: number[];
+    frequencies: number[];
+  };
+  qq_plot?: {
+    theoretical_quantiles: number[];
+    sample_quantiles: number[];
+  };
+}
+
 interface RegressionModelData {
   regression_type: string;
   regressionType?: string;
@@ -93,6 +109,8 @@ interface RegressionModelData {
   probFStatistic?: number;
   sse?: number;
   coefficients: RegressionCoefficient[];
+  residuals?: number[];
+  residuals_analysis?: ResidualsAnalysisData;
 }
 
 interface RegressionAnalysisData {
@@ -269,6 +287,8 @@ interface RegressionChartProps {
       coefficient: number;
     }>;
     r_squared: number;
+    residuals?: number[];
+    residuals_analysis?: ResidualsAnalysisData;
   }>;
   dependentVar: string;
   independentVar: string;
@@ -470,7 +490,7 @@ const AnalysisResultPage: React.FC = () => {
       frequencies: hist.frequencies,
     }));
 
-  // Исправляем создание пропсов для RegressionChart с поддержкой camelCase полей
+  // Исправляем создание пропсов для RegressionChart с поддержкой camelCase полей и добавляем анализ остатков
   const regressionChartProps: RegressionChartProps | undefined = 
     currentRegressionModel && 
     results?.regression_analysis ? {
@@ -479,7 +499,19 @@ const AnalysisResultPage: React.FC = () => {
       models: [{
         type: currentRegressionModel.regressionType || currentRegressionModel.regression_type || "",
         coefficients: currentRegressionModel.coefficients || [],
-        r_squared: currentRegressionModel.rSquared || currentRegressionModel.r_squared || 0
+        r_squared: currentRegressionModel.rSquared || currentRegressionModel.r_squared || 0,
+        residuals: currentRegressionModel.residuals || [],
+        // Проверяем наличие анализа остатков и добавляем только если все обязательные поля существуют
+        ...(currentRegressionModel.residuals_analysis && 
+          currentRegressionModel.residuals_analysis.shapiro_test && 
+          currentRegressionModel.residuals_analysis.histogram && 
+          currentRegressionModel.residuals_analysis.qq_plot ? {
+            residuals_analysis: {
+              shapiro_test: currentRegressionModel.residuals_analysis.shapiro_test,
+              histogram: currentRegressionModel.residuals_analysis.histogram,
+              qq_plot: currentRegressionModel.residuals_analysis.qq_plot
+            }
+          } : {})
       }],
       dependentVar: results.regression_analysis.dependent_variable || 
                    results.regression_analysis.dependentVariable || "y",

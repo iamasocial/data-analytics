@@ -21,7 +21,8 @@ from internal.core.ports.analysis_ports import (
     NormalityTestPort,
     ConfidenceIntervalPort,
     GoodnessOfFitPort,
-    RegressionPort
+    RegressionPort,
+    ResidualsAnalysisPort
 )
 
 # Определим константы для имен анализов, чтобы избежать опечаток
@@ -42,13 +43,15 @@ class AnalysisService(AnalysisServicePort):
                  normality_test: NormalityTestPort,
                  confidence_interval: ConfidenceIntervalPort,
                  goodness_of_fit: GoodnessOfFitPort,
-                 regression: RegressionPort):
+                 regression: RegressionPort,
+                 residuals_analysis: ResidualsAnalysisPort):
         self.data_loader = data_loader
         self.descriptive_stats = descriptive_stats
         self.normality_test = normality_test 
         self.confidence_interval = confidence_interval
         self.goodness_of_fit = goodness_of_fit
         self.regression = regression
+        self.residuals_analysis = residuals_analysis
     
     def analyze_data(self, request: DataFileRequest) -> AnalysisResponse:
         """Анализирует данные из запроса и возвращает ответ с результатами анализа"""
@@ -198,7 +201,8 @@ class AnalysisService(AnalysisServicePort):
                             f_statistic=reg_dict.get("f_statistic", 0.0) if pd.notna(reg_dict.get("f_statistic")) else 0.0,
                             f_p_value=reg_dict.get("f_p_value", 0.0) if pd.notna(reg_dict.get("f_p_value")) else 0.0,
                             sse=reg_dict.get("sse", 0.0) if pd.notna(reg_dict.get("sse")) else 0.0,
-                            data_points=reg_dict.get("data_points", [])
+                            data_points=reg_dict.get("data_points", []),
+                            residuals=reg_dict.get("residuals", [])  # Добавляем остатки регрессии
                         )
                         # Установка типа модели
                         if "model_type" in reg_dict:
@@ -214,6 +218,13 @@ class AnalysisService(AnalysisServicePort):
                                 p_value=coef_dict.get("p_value", 0.0) if pd.notna(coef_dict.get("p_value")) else 0.0
                             )
                             reg.coefficients.append(coef)
+                        
+                        # Анализ остатков регрессии, если есть остатки
+                        if reg.residuals:
+                            residuals_analysis_result = self.residuals_analysis.analyze_residuals(reg.residuals)
+                            reg.residuals_analysis = residuals_analysis_result
+                            response.processing_log.append(f"Performed residuals analysis for {reg.dependent_variable} ~ {', '.join(reg.independent_variables)}")
+                        
                         response.regressions.append(reg)
         
         except Exception as e:

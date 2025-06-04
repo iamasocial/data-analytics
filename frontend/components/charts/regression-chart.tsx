@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import * as d3 from "d3"
+import { ResidualsAnalysis, RegressionCoefficient as ResAnalysisCoefficient } from "./residuals-analysis"
 
 interface DataPoint {
   x: number;
@@ -12,15 +13,38 @@ interface RegressionCoefficient {
   variable_name?: string;
   variableName?: string;
   coefficient: number;
+  std_error?: number;
+  t_statistic?: number;
+  p_value?: number;
+  confidence_interval_lower?: number; 
+  confidence_interval_upper?: number;
 }
 
 interface RegressionModel {
   type: string;
   coefficients: RegressionCoefficient[];
   r_squared: number;
+  residuals?: number[];
+  residuals_analysis?: {
+    shapiro_test?: {
+      statistic: number;
+      p_value: number;
+      is_normal: boolean;
+    };
+    histogram?: {
+      bins: number[];
+      frequencies: number[];
+    };
+    qq_plot?: {
+      theoretical_quantiles: number[];
+      sample_quantiles: number[];
+    };
+  };
+  f_statistic?: number;
+  prob_f_statistic?: number;
 }
 
-interface RegressionChartProps {
+export interface RegressionChartProps {
   data: DataPoint[];
   models: RegressionModel[];
   dependentVar: string;
@@ -344,7 +368,7 @@ export function RegressionChart({ data, models, dependentVar, independentVar, he
     // Initial render
     renderChart();
     
-    // Handle resize
+    // Handle window resize
     const handleResize = () => {
       renderChart();
     };
@@ -353,11 +377,38 @@ export function RegressionChart({ data, models, dependentVar, independentVar, he
     return () => {
       window.removeEventListener('resize', handleResize);
     };
-  }, [data, models, dependentVar, independentVar, isMounted, height, globalYDomain]);
+  }, [isMounted, data, models, height, globalYDomain]);
+
+  // Найти модель с остатками для анализа
+  const modelWithResiduals = models.find(model => model.residuals && model.residuals.length > 0 && model.residuals_analysis);
 
   return (
-    <div ref={containerRef} style={{ width: "100%", height: "100%" }}>
-      <svg ref={svgRef} style={{ width: "100%", height: `${height}px` }} />
+    <div ref={containerRef} className="w-full overflow-x-auto">
+      <svg ref={svgRef} className="w-full" height={height}></svg>
+      
+      {/* Отображение анализа остатков, если они есть */}
+      {modelWithResiduals && modelWithResiduals.residuals && modelWithResiduals.residuals_analysis && (
+        <div className="mt-8">
+          <ResidualsAnalysis 
+            residuals={modelWithResiduals.residuals}
+            shapiroTest={modelWithResiduals.residuals_analysis.shapiro_test}
+            histogram={modelWithResiduals.residuals_analysis.histogram}
+            qqPlot={modelWithResiduals.residuals_analysis.qq_plot}
+            title={`Анализ остатков регрессии (${modelWithResiduals.type})`}
+            fStatistic={modelWithResiduals.f_statistic}
+            fPValue={modelWithResiduals.prob_f_statistic}
+            coefficients={modelWithResiduals.coefficients.map(coef => ({
+              variable_name: coef.variable_name || coef.variableName || "",
+              coefficient: coef.coefficient,
+              std_error: coef.std_error,
+              t_statistic: coef.t_statistic,
+              p_value: coef.p_value,
+              confidence_interval_lower: coef.confidence_interval_lower,
+              confidence_interval_upper: coef.confidence_interval_upper
+            }) as ResAnalysisCoefficient)}
+          />
+        </div>
+      )}
     </div>
   );
 }

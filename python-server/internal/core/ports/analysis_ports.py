@@ -77,4 +77,20 @@ class RegressionPort(ABC):
             dependent_var: Имя зависимой переменной (Y). Если None, будут перебраны все числовые столбцы.
             independent_var: Имя независимой переменной (X). Если None, будут перебраны все числовые столбцы.
         """
+        pass
+
+class ResidualsAnalysisPort(ABC):
+    """Интерфейс для анализа остатков регрессии"""
+    
+    @abstractmethod
+    def analyze_residuals(self, residuals: List[float]) -> Dict[str, Any]:
+        """
+        Выполняет анализ остатков регрессии.
+        
+        Args:
+            residuals: Список остатков регрессии.
+            
+        Returns:
+            Словарь с результатами анализа.
+        """
         pass 

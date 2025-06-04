@@ -226,6 +226,44 @@ class AnalysisServiceGrpcAdapter(analysis_pb2_grpc.AnalysisServiceServicer):
                     model.prob_f_statistic = reg_domain_data.f_p_value
                     model.sse = reg_domain_data.sse
                     
+                    # Добавляем остатки регрессии, если они есть
+                    if hasattr(reg_domain_data, 'residuals') and reg_domain_data.residuals:
+                        model.residuals.extend(reg_domain_data.residuals)
+                    
+                    # Добавляем анализ остатков, если он есть
+                    if hasattr(reg_domain_data, 'residuals_analysis') and reg_domain_data.residuals_analysis:
+                        residuals_analysis = analysis_pb2.ResidualsAnalysisResult()
+                        
+                        # Добавляем результат теста Шапиро-Уилка
+                        if 'shapiro_test' in reg_domain_data.residuals_analysis:
+                            shapiro_result = reg_domain_data.residuals_analysis['shapiro_test']
+                            shapiro_msg = analysis_pb2.NormalityTestResult()
+                            shapiro_msg.column_name = "residuals"
+                            shapiro_msg.test_name = shapiro_result.get('test_name', 'Shapiro-Wilk')
+                            shapiro_msg.statistic = shapiro_result.get('statistic', 0.0)
+                            shapiro_msg.p_value = shapiro_result.get('p_value', 0.0)
+                            shapiro_msg.is_normal = shapiro_result.get('is_normal', False)
+                            residuals_analysis.shapiro_test.CopyFrom(shapiro_msg)
+                        
+                        # Добавляем данные гистограммы
+                        if 'histogram' in reg_domain_data.residuals_analysis:
+                            hist_data = reg_domain_data.residuals_analysis['histogram']
+                            hist_msg = analysis_pb2.HistogramData()
+                            hist_msg.column_name = "residuals"
+                            hist_msg.bins.extend(hist_data.get('bins', []))
+                            hist_msg.frequencies.extend(hist_data.get('frequencies', []))
+                            residuals_analysis.histogram.CopyFrom(hist_msg)
+                        
+                        # Добавляем данные QQ-графика
+                        if 'qq_plot' in reg_domain_data.residuals_analysis:
+                            qq_data = reg_domain_data.residuals_analysis['qq_plot']
+                            qq_msg = analysis_pb2.QQPlotData()
+                            qq_msg.theoretical_quantiles.extend(qq_data.get('theoretical_quantiles', []))
+                            qq_msg.sample_quantiles.extend(qq_data.get('sample_quantiles', []))
+                            residuals_analysis.qq_plot.CopyFrom(qq_msg)
+                        
+                        model.residuals_analysis.CopyFrom(residuals_analysis)
+                    
                     # Add coefficients
                     for coef_domain in reg_domain_data.coefficients:
                         coef_msg = analysis_pb2.RegressionCoefficient()

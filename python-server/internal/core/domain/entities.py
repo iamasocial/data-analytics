@@ -87,6 +87,8 @@ class RegressionResult:
     sse: float = 0.0
     coefficients: List[RegressionCoefficient] = field(default_factory=list)
     data_points: List[Dict[str, float]] = field(default_factory=list)
+    residuals: List[float] = field(default_factory=list)  # Остатки регрессии
+    residuals_analysis: Dict[str, Any] = field(default_factory=dict)  # Результаты анализа остатков
 
 @dataclass
 class AnalysisResponse:

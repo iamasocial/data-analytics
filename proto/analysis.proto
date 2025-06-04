@@ -112,6 +112,8 @@ message RegressionModel {
     double prob_f_statistic = 5;
     double sse = 6;  // Sum of Squared Errors
     repeated RegressionCoefficient coefficients = 7;
+    repeated double residuals = 8;  // Остатки регрессии для проверки на нормальность
+    ResidualsAnalysisResult residuals_analysis = 9;  // Результаты анализа остатков
 }
 
 // Коэффициент регрессии
@@ -129,4 +131,17 @@ message RegressionCoefficient {
 message DataPoint {
     double x = 1;
     double y = 2;
+}
+
+// Результаты анализа остатков регрессии
+message ResidualsAnalysisResult {
+    NormalityTestResult shapiro_test = 1;  // Результат теста Шапиро-Уилка
+    HistogramData histogram = 2;  // Гистограмма остатков
+    QQPlotData qq_plot = 3;  // Данные для QQ-графика
+}
+
+// Данные для QQ-графика
+message QQPlotData {
+    repeated double theoretical_quantiles = 1;  // Теоретические квантили
+    repeated double sample_quantiles = 2;  // Эмпирические квантили
 }

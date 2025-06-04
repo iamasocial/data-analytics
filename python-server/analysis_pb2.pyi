@@ -154,7 +154,7 @@ class RegressionAnalysisResponse(_message.Message):
     def __init__(self, dependent_variable: _Optional[str] = ..., independent_variables: _Optional[_Iterable[str]] = ..., data_points: _Optional[_Iterable[_Union[DataPoint, _Mapping]]] = ..., models: _Optional[_Iterable[_Union[RegressionModel, _Mapping]]] = ...) -> None: ...
 
 class RegressionModel(_message.Message):
-    __slots__ = ("regression_type", "r_squared", "adjusted_r_squared", "f_statistic", "prob_f_statistic", "sse", "coefficients")
+    __slots__ = ("regression_type", "r_squared", "adjusted_r_squared", "f_statistic", "prob_f_statistic", "sse", "coefficients", "residuals", "residuals_analysis")
     REGRESSION_TYPE_FIELD_NUMBER: _ClassVar[int]
     R_SQUARED_FIELD_NUMBER: _ClassVar[int]
     ADJUSTED_R_SQUARED_FIELD_NUMBER: _ClassVar[int]
@@ -162,6 +162,8 @@ class RegressionModel(_message.Message):
     PROB_F_STATISTIC_FIELD_NUMBER: _ClassVar[int]
     SSE_FIELD_NUMBER: _ClassVar[int]
     COEFFICIENTS_FIELD_NUMBER: _ClassVar[int]
+    RESIDUALS_FIELD_NUMBER: _ClassVar[int]
+    RESIDUALS_ANALYSIS_FIELD_NUMBER: _ClassVar[int]
     regression_type: str
     r_squared: float
     adjusted_r_squared: float
@@ -169,7 +171,9 @@ class RegressionModel(_message.Message):
     prob_f_statistic: float
     sse: float
     coefficients: _containers.RepeatedCompositeFieldContainer[RegressionCoefficient]
-    def __init__(self, regression_type: _Optional[str] = ..., r_squared: _Optional[float] = ..., adjusted_r_squared: _Optional[float] = ..., f_statistic: _Optional[float] = ..., prob_f_statistic: _Optional[float] = ..., sse: _Optional[float] = ..., coefficients: _Optional[_Iterable[_Union[RegressionCoefficient, _Mapping]]] = ...) -> None: ...
+    residuals: _containers.RepeatedScalarFieldContainer[float]
+    residuals_analysis: ResidualsAnalysisResult
+    def __init__(self, regression_type: _Optional[str] = ..., r_squared: _Optional[float] = ..., adjusted_r_squared: _Optional[float] = ..., f_statistic: _Optional[float] = ..., prob_f_statistic: _Optional[float] = ..., sse: _Optional[float] = ..., coefficients: _Optional[_Iterable[_Union[RegressionCoefficient, _Mapping]]] = ..., residuals: _Optional[_Iterable[float]] = ..., residuals_analysis: _Optional[_Union[ResidualsAnalysisResult, _Mapping]] = ...) -> None: ...
 
 class RegressionCoefficient(_message.Message):
     __slots__ = ("variable_name", "coefficient", "std_error", "t_statistic", "p_value", "confidence_interval_lower", "confidence_interval_upper")
@@ -196,3 +200,21 @@ class DataPoint(_message.Message):
     x: float
     y: float
     def __init__(self, x: _Optional[float] = ..., y: _Optional[float] = ...) -> None: ...
+
+class ResidualsAnalysisResult(_message.Message):
+    __slots__ = ("shapiro_test", "histogram", "qq_plot")
+    SHAPIRO_TEST_FIELD_NUMBER: _ClassVar[int]
+    HISTOGRAM_FIELD_NUMBER: _ClassVar[int]
+    QQ_PLOT_FIELD_NUMBER: _ClassVar[int]
+    shapiro_test: NormalityTestResult
+    histogram: HistogramData
+    qq_plot: QQPlotData
+    def __init__(self, shapiro_test: _Optional[_Union[NormalityTestResult, _Mapping]] = ..., histogram: _Optional[_Union[HistogramData, _Mapping]] = ..., qq_plot: _Optional[_Union[QQPlotData, _Mapping]] = ...) -> None: ...
+
+class QQPlotData(_message.Message):
+    __slots__ = ("theoretical_quantiles", "sample_quantiles")
+    THEORETICAL_QUANTILES_FIELD_NUMBER: _ClassVar[int]
+    SAMPLE_QUANTILES_FIELD_NUMBER: _ClassVar[int]
+    theoretical_quantiles: _containers.RepeatedScalarFieldContainer[float]
+    sample_quantiles: _containers.RepeatedScalarFieldContainer[float]
+    def __init__(self, theoretical_quantiles: _Optional[_Iterable[float]] = ..., sample_quantiles: _Optional[_Iterable[float]] = ...) -> None: ...
