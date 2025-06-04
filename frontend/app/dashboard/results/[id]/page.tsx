@@ -990,6 +990,115 @@ const AnalysisResultPage: React.FC = () => {
                      (!results.normality_tests.chiSquareResults || !Array.isArray(results.normality_tests.chiSquareResults) || !results.normality_tests.chiSquareResults.length)) && (
                       <p className="text-center py-4">Нет данных о нормальности распределения</p>
                     )}
+
+                    {/* Гистограммы распределения с нормальной кривой - только для переменных из тестов нормальности */}
+                    {results.descriptive_stats?.histograms && 
+                     results.descriptive_stats.histograms.length > 0 && 
+                     histogramChartDataForDistributionChart && 
+                     results.normality_tests && (
+                      <div className="mt-8">
+                        <h3 className="text-lg font-semibold mb-4">Гистограммы распределения с наложенной нормальной кривой</h3>
+                        
+                        {/* Отладочная информация */}
+                        <div className="bg-gray-100 p-2 mb-4 rounded text-xs">
+                          <details>
+                            <summary className="cursor-pointer font-semibold">Отладочная информация о гистограммах</summary>
+                            <p>Количество гистограмм: {histogramChartDataForDistributionChart.length}</p>
+                            <p>Имена переменных в гистограммах: {histogramChartDataForDistributionChart.map(h => h.name).join(', ')}</p>
+                            <p>Имена переменных в тестах Шапиро-Уилка: {results.normality_tests.shapiroWilkResults?.map(t => t.columnName).join(', ') || 'нет'}</p>
+                            <p>Имена переменных в тестах Хи-квадрат: {results.normality_tests.chiSquareResults?.map(t => t.columnName).join(', ') || 'нет'}</p>
+                          </details>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {(() => {
+                            // Получаем список всех переменных из тестов нормальности
+                            const normalityVariables = new Set<string>();
+                            
+                            if (results.normality_tests.shapiroWilkResults && Array.isArray(results.normality_tests.shapiroWilkResults)) {
+                              results.normality_tests.shapiroWilkResults.forEach(test => {
+                                if (test.columnName) normalityVariables.add(test.columnName);
+                              });
+                            }
+                            
+                            if (results.normality_tests.chiSquareResults && Array.isArray(results.normality_tests.chiSquareResults)) {
+                              results.normality_tests.chiSquareResults.forEach(test => {
+                                if (test.columnName) normalityVariables.add(test.columnName);
+                              });
+                            }
+                            
+                            // Создаем функцию для поиска соответствия имен переменных
+                            const matchVariableName = (histName: string, normalityName: string) => {
+                              // Прямое соответствие
+                              if (histName === normalityName) return true;
+                              
+                              // Приведение к нижнему регистру для сравнения
+                              const histLower = histName.toLowerCase();
+                              const normalityLower = normalityName.toLowerCase();
+                              if (histLower === normalityLower) return true;
+                              
+                              // Удаление пробелов и других общих разделителей
+                              const clean = (str: string) => str.replace(/[\s_-]/g, '').toLowerCase();
+                              if (clean(histName) === clean(normalityName)) return true;
+                              
+                              return false;
+                            };
+                            
+                            // Отображаем все гистограммы, если имена переменных не совпадают
+                            // Это временное решение, пока проблема с именами не будет решена
+                            if (normalityVariables.size === 0 || 
+                                !histogramChartDataForDistributionChart.some(histData => 
+                                  Array.from(normalityVariables).some(normVar => matchVariableName(histData.name, normVar))
+                                )) {
+                              console.log("Имена переменных не совпадают, отображаю все гистограммы");
+                              return histogramChartDataForDistributionChart.map((histData, index) => (
+                                <div key={`norm-hist-${index}-${histData.name}`} className="border rounded-lg p-4">
+                                  <h4 className="text-md font-semibold mb-2 text-center">{histData.name}</h4>
+                                  <DistributionChart 
+                                    variableName={histData.name} 
+                                    data={{ 
+                                      bins: histData.bins, 
+                                      frequencies: histData.frequencies 
+                                    }}
+                                    showNormalCurve={true}
+                                  />
+                                </div>
+                              ));
+                            }
+                            
+                            // Фильтруем гистограммы только для переменных из тестов
+                            const filteredHistograms = histogramChartDataForDistributionChart
+                              .filter(histData => 
+                                Array.from(normalityVariables).some(normVar => matchVariableName(histData.name, normVar))
+                              );
+                              
+                            // Отображаем сообщение, если нет гистограмм для отображения
+                            if (filteredHistograms.length === 0) {
+                              return (
+                                <div className="col-span-2 text-center py-4">
+                                  <p>Нет данных гистограмм для переменных из тестов нормальности</p>
+                                </div>
+                              );
+                            }
+                            
+                            // Отображаем гистограммы для переменных из тестов
+                            return filteredHistograms.map((histData, index) => (
+                              <div key={`norm-hist-${index}-${histData.name}`} className="border rounded-lg p-4">
+                                <h4 className="text-md font-semibold mb-2 text-center">{histData.name}</h4>
+                                <DistributionChart 
+                                  variableName={histData.name} 
+                                  data={{ 
+                                    bins: histData.bins, 
+                                    frequencies: histData.frequencies 
+                                  }}
+                                  showNormalCurve={true}
+                                />
+                              </div>
+                            ));
+                          })()}
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>

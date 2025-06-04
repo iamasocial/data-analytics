@@ -837,7 +837,7 @@ export default function UploadPage() {
             <CardTitle>Результаты Анализа</CardTitle>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="descriptive-stats" className="w-full">
+            <Tabs defaultValue="normality-test" className="w-full">
               <TabsList className="grid w-full grid-cols-3 mb-4">
                 {analysisResult?.descriptive_stats && (
                     <TabsTrigger value="descriptive-stats">{t("results.tabs.descriptiveStats")}</TabsTrigger>
@@ -1021,6 +1021,33 @@ export default function UploadPage() {
                       </TableBody>
                     </Table>
                     </div>
+
+                    {/* Гистограммы распределения с нормальной кривой */}
+                    {analysisResult.descriptive_stats?.histograms && analysisResult.descriptive_stats.histograms.length > 0 && (
+                      <div className="mt-8">
+                        <h3 className="text-lg font-semibold mb-4">Гистограммы распределения с наложенной нормальной кривой</h3>
+                        
+
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {/* Временно отображаем все гистограммы без фильтрации */}
+                          {analysisResult.descriptive_stats.histograms.map((hist: any, index: number) => (
+                            <div key={`norm-hist-${index}-${hist.column_name}`} className="border rounded-lg p-4">
+                              <h4 className="text-md font-semibold mb-2 text-center">{hist.column_name}</h4>
+                              {hist.bins && hist.frequencies && hist.bins.length > 0 && hist.frequencies.length > 0 ? (
+                                <DistributionChart 
+                                  data={{ bins: hist.bins, frequencies: hist.frequencies }} 
+                                  variableName={hist.column_name}
+                                  showNormalCurve={true}
+                                />
+                              ) : (
+                                <p className="text-sm text-center text-gray-500">Нет данных для гистограммы '{hist.column_name}'</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>
