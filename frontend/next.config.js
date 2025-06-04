@@ -8,6 +8,15 @@ const nextConfig = {
   //   unoptimized: true,
   // },
 
+  /* async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: 'http://localhost:8080/api/:path*', // Прокси на Go сервер
+      },
+    ];
+  }, */
+
   // Здесь могут быть другие ваши настройки Next.js
 };
 

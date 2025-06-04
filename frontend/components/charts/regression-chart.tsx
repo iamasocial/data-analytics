@@ -8,12 +8,15 @@ interface DataPoint {
   y: number;
 }
 
+interface RegressionCoefficient {
+  variable_name?: string;
+  variableName?: string;
+  coefficient: number;
+}
+
 interface RegressionModel {
   type: string;
-  coefficients: {
-    variable_name: string;
-    coefficient: number;
-  }[];
+  coefficients: RegressionCoefficient[];
   r_squared: number;
 }
 
@@ -28,17 +31,21 @@ interface RegressionChartProps {
 
 // Function to calculate Y values based on regression type and coefficients
 // Exporting for use in UploadPage to calculate global Y scale
-export function calculateY(x: number, modelType: string, coefficients: {variable_name: string, coefficient: number}[]): number {
+export function calculateY(x: number, modelType: string, coefficients: {variable_name?: string, variableName?: string, coefficient: number}[]): number {
   // Найдем коэффициенты в зависимости от имен
-  const intercept = coefficients.find((c) => c.variable_name === "const" || c.variable_name === "intercept")?.coefficient || 0;
+  const intercept = coefficients.find((c) => 
+    c.variable_name === "const" || c.variable_name === "intercept" || 
+    c.variableName === "const" || c.variableName === "intercept"
+  )?.coefficient || 0;
   
   // Для полиномиальной регрессии нам нужны все коэффициенты
   if (modelType === "Polynomial") {
     let y = intercept;
     coefficients.forEach(coef => {
-      if (coef.variable_name !== "const" && coef.variable_name !== "intercept") {
+      const variableName = coef.variable_name || coef.variableName || "";
+      if (variableName !== "const" && variableName !== "intercept") {
         // Проверяем, содержит ли имя переменной номер степени (например, "x^2")
-        const degreeMatch = coef.variable_name.match(/\^(\d+)/);
+        const degreeMatch = variableName.match(/\^(\d+)/);
         const degree = degreeMatch ? parseInt(degreeMatch[1]) : 1;
         y += coef.coefficient * Math.pow(x, degree);
       }
@@ -47,25 +54,26 @@ export function calculateY(x: number, modelType: string, coefficients: {variable
   }
   
   // Для других типов регрессии находим один основной коэффициент (slope)
-  const slope = coefficients.find((c) => 
-    c.variable_name !== "const" && 
-    c.variable_name !== "intercept")?.coefficient || 0;
+  const slope = coefficients.find((c) => {
+    const name = c.variable_name || c.variableName || "";
+    return name !== "const" && name !== "intercept";
+  })?.coefficient || 0;
   
   // Расчет в зависимости от типа регрессии
   switch(modelType) {
     case "Linear":
       return intercept + slope * x;
     case "Quadratic": {
-      const a = coefficients.find(c => c.variable_name === "a")?.coefficient ?? 0;
-      const b = coefficients.find(c => c.variable_name === "b")?.coefficient ?? 0;
-      const c_quad = coefficients.find(c => c.variable_name === "c")?.coefficient ?? 0;
+      const a = coefficients.find(c => c.variable_name === "a" || c.variableName === "a")?.coefficient ?? 0;
+      const b = coefficients.find(c => c.variable_name === "b" || c.variableName === "b")?.coefficient ?? 0;
+      const c_quad = coefficients.find(c => c.variable_name === "c" || c.variableName === "c")?.coefficient ?? 0;
       // Важно: для квадратичной y = ax^2 + bx + c, 'c' является свободным членом.
       // 'intercept' здесь может быть нерелевантен, если он ищет 'const'.
       return a * x * x + b * x + c_quad;
     }
     case "Logarithmic": {
-      const coeff_a = coefficients.find(c => c.variable_name === "a")?.coefficient;
-      const coeff_b = coefficients.find(c => c.variable_name === "b")?.coefficient;
+      const coeff_a = coefficients.find(c => c.variable_name === "a" || c.variableName === "a")?.coefficient;
+      const coeff_b = coefficients.find(c => c.variable_name === "b" || c.variableName === "b")?.coefficient;
 
       if (coeff_a === undefined || coeff_b === undefined) {
         console.warn(`Logarithmic regression: coefficients 'a' (${coeff_a}) or 'b' (${coeff_b}) not found. Coeffs:`, coefficients);
@@ -85,40 +93,34 @@ export function calculateY(x: number, modelType: string, coefficients: {variable
       // y = a * e^(b*x)
       // В этом случае intercept это ln(a), поэтому a = e^intercept
       return Math.exp(intercept) * Math.exp(slope * x);
-    case "Power": {
-      const coeff_a = coefficients.find(c => c.variable_name === "a")?.coefficient;
-      const coeff_b = coefficients.find(c => c.variable_name === "b")?.coefficient;
-
-      if (coeff_a === undefined || coeff_b === undefined) {
-        console.warn(`Power regression: coefficients 'a' (${coeff_a}) or 'b' (${coeff_b}) not found or invalid. Coefficients available:`, coefficients);
-        return 0; // Fallback or error handling
-      }
+    case "Power":
       // y = a * x^b
-      // Handle x <= 0 for Math.pow if b is not an integer or x is negative.
-      // Python backend's power_func uses np.maximum(x, 1e-10) for x, so x passed here should generally be >0 from data.
-      if (x <= 0) {
-        // For x=0, if b>0, result is 0. If b<0, result is undefined. If b=0, result is a.
-        // Safest to return 0 if x is not positive, aligning with common interpretations or returning NaN.
-        return 0;
-      }
-      return coeff_a * Math.pow(x, coeff_b);
-    }
+      if (x <= 0) return NaN; // Power function undefined for x <= 0
+      
+      const a_power = coefficients.find(c => c.variable_name === "a" || c.variableName === "a")?.coefficient ?? 0;
+      const b_power = coefficients.find(c => c.variable_name === "b" || c.variableName === "b")?.coefficient ?? 0;
+      
+      return a_power * Math.pow(x, b_power);
     case "Trigonometric": {
-      const coeff_a = coefficients.find(c => c.variable_name === "a")?.coefficient ?? 0;
-      const coeff_b = coefficients.find(c => c.variable_name === "b")?.coefficient ?? 0;
-      const coeff_c = coefficients.find(c => c.variable_name === "c")?.coefficient ?? 0;
-      const coeff_d = coefficients.find(c => c.variable_name === "d")?.coefficient ?? 0;
-      return coeff_a * Math.sin(coeff_b * x + coeff_c) + coeff_d;
+      // y = a * sin(b * x + c) + d
+      const a_trig = coefficients.find(c => c.variable_name === "a" || c.variableName === "a")?.coefficient ?? 0;
+      const b_trig = coefficients.find(c => c.variable_name === "b" || c.variableName === "b")?.coefficient ?? 0;
+      const c_trig = coefficients.find(c => c.variable_name === "c" || c.variableName === "c")?.coefficient ?? 0;
+      const d_trig = coefficients.find(c => c.variable_name === "d" || c.variableName === "d")?.coefficient ?? 0;
+      
+      return a_trig * Math.sin(b_trig * x + c_trig) + d_trig;
     }
     case "Sigmoid": {
-      const coeff_a = coefficients.find(c => c.variable_name === "a")?.coefficient ?? 0;
-      const coeff_b = coefficients.find(c => c.variable_name === "b")?.coefficient ?? 0;
-      const coeff_c = coefficients.find(c => c.variable_name === "c")?.coefficient ?? 0;
-      const exponent = -coeff_a * (x - coeff_b);
-      return coeff_c / (1 + Math.exp(exponent));
+      // y = c / (1 + exp(-a * (x - b)))
+      const a_sig = coefficients.find(c => c.variable_name === "a" || c.variableName === "a")?.coefficient ?? 0;
+      const b_sig = coefficients.find(c => c.variable_name === "b" || c.variableName === "b")?.coefficient ?? 0;
+      const c_sig = coefficients.find(c => c.variable_name === "c" || c.variableName === "c")?.coefficient ?? 0;
+      
+      return c_sig / (1 + Math.exp(-a_sig * (x - b_sig)));
     }
     default:
-      return intercept + slope * x; // Default to linear as fallback
+      console.warn("Unknown regression type:", modelType);
+      return NaN;
   }
 }
 

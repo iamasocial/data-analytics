@@ -1,11 +1,14 @@
 package handlers
 
 import (
+	"diploma/go-server/internal/models"
 	"diploma/go-server/internal/services" // Путь к нашему сервису
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"google.golang.org/grpc/codes"  // <<-- Добавлено
@@ -77,26 +80,37 @@ func (h *AnalysisHandler) HandleAnalyzeData(c *gin.Context) {
 	}
 	log.Printf("Handler: Selected analyses from form: %v", selectedAnalyses)
 
-	// Проверяем и получаем переменные регрессии, если регрессионный анализ выбран
 	var dependentVariable, independentVariable string
+	// Создадим новый слайс для передачи в сервис, чтобы не изменять исходный selectedAnalyses
+	// который может использоваться где-то еще или для логирования "чистых" пользовательских выборов.
+	// Однако, в текущей логике selectedAnalyses извлекается из формы и сразу используется.
+	// Важно, чтобы selectedAnalyses, передаваемый в PerformAnalysis,
+	// не содержал regression_dependent/independent.
+	// А dependentVariable и independentVariable передавались отдельно.
+
+	cleanedSelectedAnalyses := make([]string, 0, len(selectedAnalyses))
+	isRegressionSelected := false
+
 	for _, analysis := range selectedAnalyses {
 		if analysis == "regression" {
-			// Получаем зависимую и независимую переменные из формы
-			dependentVariable = c.PostForm("dependent_variable")
-			independentVariable = c.PostForm("independent_variable")
-
-			if dependentVariable == "" || independentVariable == "" {
-				log.Printf("Error: Missing regression variables. dependent_variable=%s, independent_variable=%s", dependentVariable, independentVariable)
-				c.JSON(http.StatusBadRequest, gin.H{"error": "For regression analysis, both dependent and independent variables must be specified"})
-				return
-			}
-
-			log.Printf("Handler: Regression variables - dependent: %s, independent: %s", dependentVariable, independentVariable)
-
-			// Добавляем информацию о переменных в список анализов, чтобы передать их в Python сервис
-			selectedAnalyses = append(selectedAnalyses, "regression_dependent:"+dependentVariable, "regression_independent:"+independentVariable)
-			break
+			isRegressionSelected = true
+			// Добавляем "regression" в cleanedSelectedAnalyses, но не строки с префиксами
+			cleanedSelectedAnalyses = append(cleanedSelectedAnalyses, analysis)
+		} else if !strings.HasPrefix(analysis, "regression_dependent:") && !strings.HasPrefix(analysis, "regression_independent:") {
+			cleanedSelectedAnalyses = append(cleanedSelectedAnalyses, analysis)
 		}
+	}
+
+	if isRegressionSelected {
+		dependentVariable = c.PostForm("dependent_variable")
+		independentVariable = c.PostForm("independent_variable")
+
+		if dependentVariable == "" || independentVariable == "" {
+			log.Printf("Error: Missing regression variables. dependent_variable=%s, independent_variable=%s", dependentVariable, independentVariable)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "For regression analysis, both dependent and independent variables must be specified"})
+			return
+		}
+		log.Printf("Handler: Regression variables - dependent: %s, independent: %s", dependentVariable, independentVariable)
 	}
 
 	// Открываем файл
@@ -119,8 +133,8 @@ func (h *AnalysisHandler) HandleAnalyzeData(c *gin.Context) {
 	fileName := fileHeader.Filename
 	log.Printf("Handler: Read file %s, size: %d bytes", fileName, len(fileContent))
 
-	// Вызываем сервис анализа, передавая контекст запроса Gin и выбранные анализы
-	analysisResponse, err := h.service.PerformAnalysis(c.Request.Context(), fileContent, fileName, selectedAnalyses)
+	// Вызываем сервис анализа, передавая "очищенный" selectedAnalyses
+	analysisResponse, err := h.service.PerformAnalysis(c.Request.Context(), fileName, fileContent, cleanedSelectedAnalyses, dependentVariable, independentVariable)
 	if err != nil {
 		log.Printf("Error performing analysis: %v", err)
 
@@ -230,4 +244,76 @@ func (h *AnalysisHandler) HandleGetColumns(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"columns": columns,
 	})
+}
+
+// HandleGetUserAnalysisHistory обрабатывает запрос на получение истории анализов пользователя.
+func (h *AnalysisHandler) HandleGetUserAnalysisHistory(c *gin.Context) {
+	log.Println("Handler: Received /api/analyses/history request")
+
+	if h.service == nil {
+		log.Println("Error: AnalysisService is not initialized in AnalysisHandler for history")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error: service not available"})
+		return
+	}
+
+	// Контекст уже содержит userID благодаря AuthMiddleware
+	userAnalyses, err := h.service.GetUserAnalysisHistory(c.Request.Context())
+	if err != nil {
+		// Логируем ошибку, которая пришла из сервисного слоя (она уже содержит детали)
+		log.Printf("Error getting user analysis history from service: %v", err)
+		// Проверяем на известные типы ошибок, если нужно специфичное поведение
+		// Например, если ошибка связана с тем, что userID не найден (хотя middleware должен это покрывать)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve analysis history"})
+		return
+	}
+
+	if userAnalyses == nil {
+		// Если история пуста, возвращаем пустой массив, а не ошибку
+		log.Println("Handler: No analysis history found for the user, returning empty list.")
+		c.JSON(http.StatusOK, []models.AnalysisRun{}) // Важно вернуть [] а не null для JSON
+		return
+	}
+
+	log.Printf("Handler: Successfully retrieved %d analysis runs for history.", len(userAnalyses))
+	c.JSON(http.StatusOK, userAnalyses)
+}
+
+// HandleGetAnalysisRunResults обрабатывает запрос на получение детальных результатов конкретного запуска анализа.
+func (h *AnalysisHandler) HandleGetAnalysisRunResults(c *gin.Context) {
+	runIDStr := c.Param("runId") // Получаем runId из параметра пути
+	runID, err := strconv.ParseInt(runIDStr, 10, 64)
+	if err != nil {
+		log.Printf("Error parsing runId '%s' from path: %v", runIDStr, err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid run ID format"})
+		return
+	}
+
+	log.Printf("Handler: Received /api/analyses/history/%d/results request", runID)
+
+	if h.service == nil {
+		log.Println("Error: AnalysisService is not initialized in AnalysisHandler for run results")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error: service not available"})
+		return
+	}
+
+	// Здесь также подразумевается, что AuthMiddleware уже проверил аутентификацию.
+	// Дополнительная проверка, принадлежит ли runID текущему пользователю, может быть добавлена в сервисе.
+	resultsMap, err := h.service.GetAnalysisRunResults(c.Request.Context(), runID)
+	if err != nil {
+		log.Printf("Error getting analysis run results from service for runID %d: %v", runID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve analysis results"})
+		return
+	}
+
+	if len(resultsMap) == 0 {
+		// Если для данного runID нет результатов (или сам runID не найден/не принадлежит пользователю, в зависимости от логики сервиса)
+		// Можно вернуть 404 Not Found
+		log.Printf("Handler: No results found for analysis run ID %d.", runID)
+		c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("No analysis results found for run ID %d", runID)})
+		return
+	}
+
+	log.Printf("Handler: Successfully retrieved results for analysis run ID %d.", runID)
+	// Отправляем напрямую карту, так как значения в ней уже json.RawMessage (байты JSON)
+	c.JSON(http.StatusOK, resultsMap)
 }

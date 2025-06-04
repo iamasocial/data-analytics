@@ -1,83 +1,80 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useTranslation } from "@/components/language-provider"
 import { Upload, FileText, Eye, Trash2, BarChart2, PieChart } from "lucide-react"
 
-// Имитация данных истории анализов
-const analysisHistory = [
-  {
-    id: "1",
-    date: "2025-04-28",
-    fileName: "sales_data_2025.csv",
-    fileType: "CSV",
-    status: "completed",
-  },
-  {
-    id: "2",
-    date: "2025-04-25",
-    fileName: "customer_survey.xlsx",
-    fileType: "XLSX",
-    status: "completed",
-  },
-  {
-    id: "3",
-    date: "2025-04-20",
-    fileName: "product_metrics.json",
-    fileType: "JSON",
-    status: "completed",
-  },
-  {
-    id: "4",
-    date: "2025-04-15",
-    fileName: "marketing_campaign.csv",
-    fileType: "CSV",
-    status: "processing",
-  },
-  {
-    id: "5",
-    date: "2025-04-10",
-    fileName: "financial_report.xlsx",
-    fileType: "XLSX",
-    status: "failed",
-  },
-]
+// Интерфейс для данных с бэкенда
+interface AnalysisRun {
+  id: number; 
+  user_id: number; 
+  file_name: string;
+  run_at: string; 
+  selected_analyses: string[];
+  dependent_variable?: string | null;
+  independent_variable?: string | null;
+}
 
 export default function DashboardPage() {
   const { t } = useTranslation()
-  const [filter, setFilter] = useState("all")
+  const [analysisHistory, setAnalysisHistory] = useState<AnalysisRun[]>([])
+  const [loading, setLoading] = useState<boolean>(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const filteredHistory = filter === "all" ? analysisHistory : analysisHistory.filter((item) => item.status === filter)
+  useEffect(() => {
+    const fetchHistory = async () => {
+      setLoading(true);
+      setError(null);
+      console.log("[DashboardPage] Attempting to get token from localStorage with key 'authToken'.");
+      const token = localStorage.getItem('authToken');
+      console.log("[DashboardPage] Token from localStorage (key 'authToken'):", token);
 
-  const getStatusBadgeClass = (status: string) => {
-    switch (status) {
-      case "completed":
-        return "bg-green-100 text-green-800"
-      case "processing":
-        return "bg-blue-100 text-blue-800"
-      case "failed":
-        return "bg-red-100 text-red-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
+      if (!token) {
+        console.error("[DashboardPage] Token not found in localStorage (key 'authToken').");
+        // Возможно, здесь стоит перенаправить на страницу логина
+        // setLoading(false); // Убедитесь, что загрузка сбрасывается, если токена нет
+        return;
+      }
+      console.log("[DashboardPage] Token found (key 'authToken'), proceeding to fetch history.");
+
+      try {
+        const response = await fetch('http://localhost:8080/api/analyses/history', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `Ошибка при загрузке истории: ${response.statusText}`);
+        }
+
+        const data: AnalysisRun[] = await response.json();
+        setAnalysisHistory(data);
+      } catch (err: any) {
+        setError(err.message || 'Произошла неизвестная ошибка.');
+        console.error("Fetch history error:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchHistory();
+  }, []);
+
+  const displayedHistory = analysisHistory;
+
+  if (loading) {
+    // Можно добавить более явный индикатор загрузки для таблицы истории
+    // return <div className="space-y-6"><p>Загрузка дашборда...</p></div>
   }
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case "completed":
-        return t("completed")
-      case "processing":
-        return t("processing")
-      case "failed":
-        return t("failed")
-      default:
-        return status
-    }
+  if (error && analysisHistory.length === 0) {
+    return <div className="space-y-6"><p className="text-red-500">Ошибка загрузки истории: {error}</p></div>
   }
 
   return (
@@ -102,8 +99,7 @@ export default function DashboardPage() {
             <FileText className="h-4 w-4 text-gray-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">12</div>
-            <p className="text-xs text-gray-500">+2 за последнюю неделю</p>
+            <div className="text-2xl font-bold">{displayedHistory.length}</div>
           </CardContent>
         </Card>
         <Card>
@@ -112,8 +108,7 @@ export default function DashboardPage() {
             <BarChart2 className="h-4 w-4 text-gray-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">10</div>
-            <p className="text-xs text-gray-500">83% от общего числа</p>
+            <div className="text-2xl font-bold">N/A</div>
           </CardContent>
         </Card>
         <Card>
@@ -122,8 +117,7 @@ export default function DashboardPage() {
             <PieChart className="h-4 w-4 text-gray-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">1.2 GB</div>
-            <p className="text-xs text-gray-500">+250 MB за последний месяц</p>
+            <div className="text-2xl font-bold">N/A</div>
           </CardContent>
         </Card>
       </div>
@@ -135,73 +129,49 @@ export default function DashboardPage() {
               <CardTitle>{t("analysisHistory")}</CardTitle>
               <CardDescription>История ваших загрузок и анализов данных</CardDescription>
             </div>
-            <Select value={filter} onValueChange={setFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Фильтр по статусу" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Все статусы</SelectItem>
-                <SelectItem value="completed">Завершенные</SelectItem>
-                <SelectItem value="processing">В обработке</SelectItem>
-                <SelectItem value="failed">С ошибками</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("date")}</TableHead>
-                <TableHead>Файл</TableHead>
-                <TableHead>{t("fileType")}</TableHead>
-                <TableHead>{t("status")}</TableHead>
-                <TableHead className="text-right">{t("actions")}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredHistory.length > 0 ? (
-                filteredHistory.map((item) => (
+          {loading && <p>Загрузка истории...</p>}
+          {error && analysisHistory.length === 0 && <p className="text-red-500">Не удалось загрузить историю: {error}</p>}
+          {!loading && !error && displayedHistory.length === 0 && (
+            <p className="text-center py-6 text-gray-500">История анализов пуста.</p>
+          )}
+          {!loading && displayedHistory.length > 0 && (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t("date")}</TableHead>
+                  <TableHead>Файл</TableHead>
+                  <TableHead>Выбранные анализы</TableHead>
+                  <TableHead className="text-right">{t("actions")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {displayedHistory.map((item) => (
                   <TableRow key={item.id}>
-                    <TableCell>{new Date(item.date).toLocaleDateString()}</TableCell>
-                    <TableCell>{item.fileName}</TableCell>
-                    <TableCell>{item.fileType}</TableCell>
-                    <TableCell>
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClass(
-                          item.status,
-                        )}`}
-                      >
-                        {getStatusText(item.status)}
-                      </span>
-                    </TableCell>
+                    <TableCell>{new Date(item.run_at).toLocaleDateString()}</TableCell>
+                    <TableCell>{item.file_name}</TableCell>
+                    <TableCell>{item.selected_analyses.join(', ')}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        {item.status === "completed" && (
-                          <Button variant="ghost" size="icon" asChild>
-                            <Link href={`/dashboard/results/${item.id}`}>
-                              <Eye className="h-4 w-4" />
-                              <span className="sr-only">{t("view")}</span>
-                            </Link>
-                          </Button>
-                        )}
-                        <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600 hover:bg-red-50">
+                        <Button variant="ghost" size="icon" asChild>
+                          <Link href={`/dashboard/results/${item.id}`}>
+                            <Eye className="h-4 w-4" />
+                            <span className="sr-only">{t("view")}</span>
+                          </Link>
+                        </Button>
+                        <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => alert('Функция удаления еще не реализована')}>
                           <Trash2 className="h-4 w-4" />
                           <span className="sr-only">{t("delete")}</span>
                         </Button>
                       </div>
                     </TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center py-6 text-gray-500">
-                    Нет данных для отображения
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
         <CardFooter className="flex justify-between">
           <Button variant="outline" disabled>

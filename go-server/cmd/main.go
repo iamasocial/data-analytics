@@ -76,8 +76,9 @@ func main() {
 		}
 	}()
 
-	// Создаем сервис
-	analysisService := services.NewAnalysisService(analysisClient)
+	// --- Инициализация репозитория анализа ---
+	analysisRepository := repository.NewPostgresAnalysisRepository(db)                 // <--- Инициализация репозитория анализа
+	analysisService := services.NewAnalysisService(analysisClient, analysisRepository) // <--- Новая инициализация с репозиторием
 
 	// Создаем хэндлер
 	analysisHandler := handlers.NewAnalysisHandler(analysisService)
@@ -113,8 +114,10 @@ func main() {
 	{
 		// Маршруты, требующие аутентификации
 		// Вместо analysisHandler.RegisterRoutes(router) делаем так:
-		apiProtected.POST("/analyze", analysisHandler.HandleAnalyzeData) // Используем метод хендлера напрямую
-		apiProtected.POST("/columns", analysisHandler.HandleGetColumns)  // Используем метод хендлера напрямую
+		apiProtected.POST("/analyze", analysisHandler.HandleAnalyzeData)                                  // Используем метод хендлера напрямую
+		apiProtected.POST("/columns", analysisHandler.HandleGetColumns)                                   // Используем метод хендлера напрямую
+		apiProtected.GET("/analyses/history", analysisHandler.HandleGetUserAnalysisHistory)               // Новый маршрут
+		apiProtected.GET("/analyses/history/:runId/results", analysisHandler.HandleGetAnalysisRunResults) // Новый маршрут для деталей
 	}
 
 	// --- Отдача статических файлов React ---

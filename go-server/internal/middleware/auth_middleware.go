@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"context"
+	"diploma/go-server/internal/common"
 	"diploma/go-server/internal/services"
 	"fmt"
 	"net/http"
@@ -11,14 +13,13 @@ import (
 )
 
 const (
-	authorizationHeader = "Authorization"
-	userCtx             = "userId"
+	AuthorizationHeader = "Authorization"
 )
 
 // AuthMiddleware creates a gin.HandlerFunc for JWT authentication.
 func AuthMiddleware(jwtSecret string, authService services.AuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		header := c.GetHeader(authorizationHeader)
+		header := c.GetHeader(AuthorizationHeader)
 		if header == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Empty auth header"})
 			return
@@ -50,14 +51,16 @@ func AuthMiddleware(jwtSecret string, authService services.AuthService) gin.Hand
 		}
 
 		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-			userIDString, ok := claims["sub"].(string) // "sub" is typically used for subject (user ID)
+			userIDString, ok := claims["sub"].(string)
 			if !ok {
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims: user ID not found or not a string"})
 				return
 			}
-			// You might want to convert userIDString to an integer or appropriate type if needed.
-			// For now, we'll store it as a string.
-			c.Set(userCtx, userIDString)
+			// Устанавливаем значение в стандартный контекст запроса
+			ctxWithUser := context.WithValue(c.Request.Context(), common.UserIDKey, userIDString)
+			c.Request = c.Request.WithContext(ctxWithUser)
+			// Также можно продублировать в gin.Context.Keys для прямого доступа через c.Get(), если потребуется где-то еще
+			c.Set(string(common.UserIDKey), userIDString)
 		} else {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
 			return
@@ -68,12 +71,12 @@ func AuthMiddleware(jwtSecret string, authService services.AuthService) gin.Hand
 }
 
 // GetUserIDFromContext retrieves the user ID from the Gin context.
-// It should be called by handlers that are protected by AuthMiddleware.
 func GetUserIDFromContext(c *gin.Context) (string, bool) {
-	userID, exists := c.Get(userCtx)
-	if !exists {
+	// Пример получения из стандартного контекста, если он был установлен
+	userIDFromStdCtx := c.Request.Context().Value(common.UserIDKey)
+	if userIDFromStdCtx == nil {
 		return "", false
 	}
-	userIDStr, ok := userID.(string)
+	userIDStr, ok := userIDFromStdCtx.(string)
 	return userIDStr, ok
 }
