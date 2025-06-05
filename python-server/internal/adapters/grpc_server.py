@@ -222,8 +222,16 @@ class AnalysisServiceGrpcAdapter(analysis_pb2_grpc.AnalysisServiceServicer):
                     # Set model metrics
                     model.r_squared = reg_domain_data.r_squared
                     model.adjusted_r_squared = reg_domain_data.adjusted_r_squared
-                    model.f_statistic = reg_domain_data.f_statistic
-                    model.prob_f_statistic = reg_domain_data.f_p_value
+                    
+                                        # Используем правильные имена полей
+                    if hasattr(reg_domain_data, 'f_statistic'):
+                        model.f_statistic = reg_domain_data.f_statistic
+                    
+                    if hasattr(reg_domain_data, 'prob_f_statistic'):
+                        model.prob_f_statistic = reg_domain_data.prob_f_statistic
+                    elif hasattr(reg_domain_data, 'f_p_value'):
+                        model.prob_f_statistic = reg_domain_data.f_p_value
+                    
                     model.sse = reg_domain_data.sse
                     
                     # Добавляем остатки регрессии, если они есть
@@ -244,6 +252,9 @@ class AnalysisServiceGrpcAdapter(analysis_pb2_grpc.AnalysisServiceServicer):
                             shapiro_msg.p_value = shapiro_result.get('p_value', 0.0)
                             shapiro_msg.is_normal = shapiro_result.get('is_normal', False)
                             residuals_analysis.shapiro_test.CopyFrom(shapiro_msg)
+                            
+                            # Добавляем отладочную информацию
+                            grpc_response.processing_log.append(f"DEBUG: Added Shapiro-Wilk test for residuals, statistic={shapiro_msg.statistic}, p-value={shapiro_msg.p_value}")
                         
                         # Добавляем данные гистограммы
                         if 'histogram' in reg_domain_data.residuals_analysis:
@@ -253,6 +264,9 @@ class AnalysisServiceGrpcAdapter(analysis_pb2_grpc.AnalysisServiceServicer):
                             hist_msg.bins.extend(hist_data.get('bins', []))
                             hist_msg.frequencies.extend(hist_data.get('frequencies', []))
                             residuals_analysis.histogram.CopyFrom(hist_msg)
+                            
+                            # Добавляем отладочную информацию
+                            grpc_response.processing_log.append(f"DEBUG: Added histogram for residuals, bins count={len(hist_msg.bins)}, frequencies count={len(hist_msg.frequencies)}")
                         
                         # Добавляем данные QQ-графика
                         if 'qq_plot' in reg_domain_data.residuals_analysis:
@@ -261,6 +275,9 @@ class AnalysisServiceGrpcAdapter(analysis_pb2_grpc.AnalysisServiceServicer):
                             qq_msg.theoretical_quantiles.extend(qq_data.get('theoretical_quantiles', []))
                             qq_msg.sample_quantiles.extend(qq_data.get('sample_quantiles', []))
                             residuals_analysis.qq_plot.CopyFrom(qq_msg)
+                            
+                            # Добавляем отладочную информацию
+                            grpc_response.processing_log.append(f"DEBUG: Added QQ-plot for residuals, theoretical quantiles count={len(qq_msg.theoretical_quantiles)}, sample quantiles count={len(qq_msg.sample_quantiles)}")
                         
                         model.residuals_analysis.CopyFrom(residuals_analysis)
                     
@@ -273,10 +290,15 @@ class AnalysisServiceGrpcAdapter(analysis_pb2_grpc.AnalysisServiceServicer):
                         coef_msg.t_statistic = coef_domain.t_statistic
                         coef_msg.p_value = coef_domain.p_value
                         
-                        # Вычисляем доверительные интервалы на основе коэффициента и стандартной ошибки
-                        t_critical = 1.96
-                        coef_msg.confidence_interval_lower = coef_domain.coefficient - t_critical * coef_domain.standard_error
-                        coef_msg.confidence_interval_upper = coef_domain.coefficient + t_critical * coef_domain.standard_error
+                        # Используем доверительные интервалы из доменного объекта, если они есть
+                        if hasattr(coef_domain, 'confidence_interval_lower') and hasattr(coef_domain, 'confidence_interval_upper'):
+                            coef_msg.confidence_interval_lower = coef_domain.confidence_interval_lower
+                            coef_msg.confidence_interval_upper = coef_domain.confidence_interval_upper
+                        else:
+                            # Вычисляем доверительные интервалы на основе коэффициента и стандартной ошибки
+                            t_critical = 1.96
+                            coef_msg.confidence_interval_lower = coef_domain.coefficient - t_critical * coef_domain.standard_error
+                            coef_msg.confidence_interval_upper = coef_domain.coefficient + t_critical * coef_domain.standard_error
                         
                         model.coefficients.append(coef_msg)
                     
@@ -301,7 +323,7 @@ class AnalysisServiceGrpcAdapter(analysis_pb2_grpc.AnalysisServiceServicer):
             import traceback
             error_message = f"Error analyzing data: {e}"
             full_traceback = traceback.format_exc()
-            print(f"{error_message}\\n{full_traceback}")
+            print(f"{error_message}\n{full_traceback}")
             
             grpc_response.processing_log.append(error_message)
             grpc_response.processing_log.append(full_traceback)

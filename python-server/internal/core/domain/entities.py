@@ -74,6 +74,8 @@ class RegressionCoefficient:
     standard_error: float = 0.0
     t_statistic: float = 0.0
     p_value: float = 0.0
+    confidence_interval_lower: float = 0.0  # Нижняя граница доверительного интервала
+    confidence_interval_upper: float = 0.0  # Верхняя граница доверительного интервала
 
 @dataclass
 class RegressionResult:

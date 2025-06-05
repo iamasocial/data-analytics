@@ -215,7 +215,9 @@ class AnalysisService(AnalysisServicePort):
                                 coefficient=coef_dict.get("coefficient", 0.0) if pd.notna(coef_dict.get("coefficient")) else 0.0,
                                 standard_error=coef_dict.get("standard_error", 0.0) if pd.notna(coef_dict.get("standard_error")) else 0.0,
                                 t_statistic=coef_dict.get("t_statistic", 0.0) if pd.notna(coef_dict.get("t_statistic")) else 0.0,
-                                p_value=coef_dict.get("p_value", 0.0) if pd.notna(coef_dict.get("p_value")) else 0.0
+                                p_value=coef_dict.get("p_value", 0.0) if pd.notna(coef_dict.get("p_value")) else 0.0,
+                                confidence_interval_lower=coef_dict.get("confidence_interval_lower", 0.0) if pd.notna(coef_dict.get("confidence_interval_lower")) else 0.0,
+                                confidence_interval_upper=coef_dict.get("confidence_interval_upper", 0.0) if pd.notna(coef_dict.get("confidence_interval_upper")) else 0.0
                             )
                             reg.coefficients.append(coef)
                         

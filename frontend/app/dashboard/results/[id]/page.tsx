@@ -12,6 +12,8 @@ import { TimeSeriesChart } from "@/components/charts/time-series-chart"
 import { Download, RefreshCw, AlertCircle, CheckCircle2 } from "lucide-react"
 import { RegressionChart, calculateY } from "@/components/charts/regression-chart";
 import { Label } from "@/components/ui/label";
+import { QQPlot } from "@/components/charts/qq-plot"
+import { ResidualsAnalysis } from "@/components/charts/residuals-analysis"
 
 // Тип для гистограммы
 interface Histogram {
@@ -269,10 +271,16 @@ const regressionTypeTranslations: { [key: string]: string } = {
 
 // Helper function to format numbers, handling potential non-numeric modes
 // Скопировано из upload/page.tsx
-function formatNumber(value: number | string | null | undefined, decimals = 3): string {
+function formatNumber(value: number | string | null | undefined, decimals = 3, useExponential = false): string {
   if (value === null || value === undefined) return "N/A";
   const num = Number(value);
   if (isNaN(num)) return "N/A";
+  
+  // Используем экспоненциальную запись для очень маленьких чисел (p-значения)
+  if (useExponential && Math.abs(num) > 0 && Math.abs(num) < 0.01) {
+    return num.toExponential(decimals);
+  }
+  
   return num.toFixed(decimals);
 }
 
@@ -348,10 +356,7 @@ const AnalysisResultPage: React.FC = () => {
             if (typeof refreshData.token === 'string') {
               token = refreshData.token;
               localStorage.setItem('authToken', refreshData.token);
-              console.log('Токен успешно обновлен');
             }
-          } else {
-            console.error('Не удалось обновить токен');
           }
         } catch (refreshError) {
           console.error('Ошибка при обновлении токена:', refreshError);
@@ -377,7 +382,6 @@ const AnalysisResultPage: React.FC = () => {
             // Перенаправляем на страницу входа
             if (typeof window !== 'undefined') {
               localStorage.removeItem('authToken'); // Удаляем невалидный токен
-              console.log('Авторизация истекла. Перенаправление на страницу входа...');
               // Сохраняем текущий URL для возврата после авторизации
               if (window.location.pathname) {
                 localStorage.setItem('redirectAfterLogin', window.location.pathname);
@@ -392,25 +396,15 @@ const AnalysisResultPage: React.FC = () => {
           throw new Error(errorData.message || t('http_error_status') + ': ' + response.status.toString());
         }
 
-        // Преобразуем ответ в текст для отладки
         const rawText = await response.text();
-        console.log("Сырой ответ API:", rawText);
-        
-        // Парсим текст в JSON
         const data = JSON.parse(rawText);
         
-        // Глубокое логирование структуры
-        console.log("Структура data:", JSON.stringify(data, null, 2));
-        
         const analysisData = data.results || data; 
-        console.log("Структура analysisData:", JSON.stringify(analysisData, null, 2));
         
         // Проверяем, если normality_tests пришел как строка JSON
         if (analysisData.normality_tests && typeof analysisData.normality_tests === 'string') {
           try {
-            console.log("normality_tests пришли как строка, пробуем распарсить");
             analysisData.normality_tests = JSON.parse(analysisData.normality_tests);
-            console.log("Распарсенные normality_tests:", analysisData.normality_tests);
           } catch (e) {
             console.error("Ошибка при парсинге normality_tests:", e);
           }
@@ -421,10 +415,8 @@ const AnalysisResultPage: React.FC = () => {
           if (typeof analysisData[key] === 'string' && 
               (analysisData[key].startsWith('{') || analysisData[key].startsWith('['))) {
             try {
-              console.log(`Пробуем распарсить поле ${key} как JSON`);
               const parsed = JSON.parse(analysisData[key]);
               analysisData[key] = parsed;
-              console.log(`Распарсенное поле ${key}:`, parsed);
             } catch (e) {
               console.error(`Ошибка при парсинге поля ${key}:`, e);
             }
@@ -432,15 +424,6 @@ const AnalysisResultPage: React.FC = () => {
         }
         
         setResults(analysisData);
-        
-        // Отладочный вывод для проверки данных
-        console.log("Полученные данные после обработки:", analysisData);
-        if (analysisData.normality_tests) {
-          console.log("normality_tests:", analysisData.normality_tests);
-          console.log("Тип normality_tests:", typeof analysisData.normality_tests);
-          console.log("shapiroWilkResults:", analysisData.normality_tests.shapiroWilkResults);
-          console.log("chiSquareResults:", analysisData.normality_tests.chiSquareResults);
-        }
 
         if (analysisData?.regression_analysis?.models && analysisData.regression_analysis.models.length > 0) {
           // Сортируем модели по adjusted_r_squared (убывание)
@@ -501,15 +484,18 @@ const AnalysisResultPage: React.FC = () => {
         coefficients: currentRegressionModel.coefficients || [],
         r_squared: currentRegressionModel.rSquared || currentRegressionModel.r_squared || 0,
         residuals: currentRegressionModel.residuals || [],
-        // Проверяем наличие анализа остатков и добавляем только если все обязательные поля существуют
-        ...(currentRegressionModel.residuals_analysis && 
-          currentRegressionModel.residuals_analysis.shapiro_test && 
-          currentRegressionModel.residuals_analysis.histogram && 
-          currentRegressionModel.residuals_analysis.qq_plot ? {
+        // Передаем данные анализа остатков, если они есть, без проверки всех полей
+        ...(currentRegressionModel.residuals_analysis ? {
             residuals_analysis: {
-              shapiro_test: currentRegressionModel.residuals_analysis.shapiro_test,
-              histogram: currentRegressionModel.residuals_analysis.histogram,
-              qq_plot: currentRegressionModel.residuals_analysis.qq_plot
+              ...(currentRegressionModel.residuals_analysis.shapiro_test && {
+                shapiro_test: currentRegressionModel.residuals_analysis.shapiro_test
+              }),
+              ...(currentRegressionModel.residuals_analysis.histogram && {
+                histogram: currentRegressionModel.residuals_analysis.histogram
+              }),
+              ...(currentRegressionModel.residuals_analysis.qq_plot && {
+                qq_plot: currentRegressionModel.residuals_analysis.qq_plot
+              })
             }
           } : {})
       }],
@@ -656,17 +642,120 @@ const AnalysisResultPage: React.FC = () => {
         {regressionChartProps && (
           <div className="mt-4" style={{ minHeight: '400px' }}>
             <h4 className="font-semibold mb-2">График регрессии</h4>
-            {/* Добавляем вывод отладочной информации */}
-            <details className="mb-2 text-xs text-gray-500">
-              <summary>Отладочная информация о графике</summary>
-              <p>data points: {regressionChartProps.data?.length || 0}</p>
-              <p>models: {regressionChartProps.models?.length || 0}</p>
-              <p>type: {regressionChartProps.models?.[0]?.type}</p>
-              <p>coefficients: {regressionChartProps.models?.[0]?.coefficients?.length || 0}</p>
-              <p>dependentVar: {regressionChartProps.dependentVar}</p>
-              <p>independentVar: {regressionChartProps.independentVar}</p>
-            </details>
             <RegressionChart {...regressionChartProps} />
+          </div>
+        )}
+
+        {/* Анализ остатков регрессии - переписанный блок */}
+        {currentModel && (
+          <div className="mt-8">
+            {/* Получаем данные анализа остатков, учитывая разные возможные форматы имен полей */}
+            {(() => {
+              // Поддержка как snake_case, так и camelCase вариантов полей
+              const residualsAnalysis = currentModel.residuals_analysis || (currentModel as any).residualsAnalysis;
+              
+              // Извлекаем shapiroTest
+              const shapiroTest = residualsAnalysis?.shapiro_test || residualsAnalysis?.shapiroTest;
+              
+              // Извлекаем histogram
+              const histogram = residualsAnalysis?.histogram;
+              
+              // Извлекаем qqPlot 
+              const qqPlot = residualsAnalysis?.qq_plot || residualsAnalysis?.qqPlot;
+              
+              // Преобразуем qqPlot в нужный формат, если он существует
+              const formattedQqPlot = qqPlot ? {
+                theoretical_quantiles: qqPlot.theoretical_quantiles || qqPlot.theoreticalQuantiles,
+                sample_quantiles: qqPlot.sample_quantiles || qqPlot.sampleQuantiles
+              } : undefined;
+              
+              return (
+                <ResidualsAnalysis 
+                  residuals={currentModel.residuals || []}
+                  shapiroTest={shapiroTest}
+                  histogram={histogram}
+                  qqPlot={formattedQqPlot}
+                  title={`Анализ остатков регрессии (${regressionTypeTranslations[modelType] || modelType})`}
+                  fStatistic={currentModel.f_statistic || currentModel.fStatistic}
+                  fPValue={currentModel.prob_f_statistic || currentModel.probFStatistic}
+                  coefficients={currentModel.coefficients && currentModel.coefficients.map(coef => ({
+                    variable_name: coef.variable_name || coef.variableName || "",
+                    coefficient: coef.coefficient,
+                    std_error: coef.std_error || coef.stdError,
+                    t_statistic: coef.t_statistic || coef.tStatistic,
+                    p_value: coef.p_value || coef.pValue,
+                    confidence_interval_lower: coef.confidence_interval_lower || coef.confidenceIntervalLower,
+                    confidence_interval_upper: coef.confidence_interval_upper || coef.confidenceIntervalUpper
+                  }))}
+                />
+              );
+            })()}
+          </div>
+        )}
+
+        {/* Таблица коэффициентов */}
+        {currentModel && currentModel.coefficients && currentModel.coefficients.length > 0 && (
+          <div className="mt-6">
+            <h4 className="font-semibold mb-2">Сводка по модели: {regressionTypeTranslations[modelType] || modelType}</h4>
+            <Table className="w-full">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-1/6">Переменная</TableHead>
+                  <TableHead className="w-1/6">Коэффициент</TableHead>
+                  <TableHead className="w-1/6">Стд. ошибка</TableHead>
+                  <TableHead className="w-1/6">t-статистика</TableHead>
+                  <TableHead className="w-1/6">p-значение</TableHead>
+                  <TableHead className="w-1/6">Доверительный интервал (95%)</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {currentModel.coefficients.map((coef, index) => {
+                  // Поддержка как snake_case, так и camelCase имен полей
+                  const varName = coef.variable_name || coef.variableName || "";
+                  const stdError = coef.std_error || coef.stdError || 0;
+                  const tStat = coef.t_statistic || coef.tStatistic || 0;
+                  const pValue = coef.p_value || coef.pValue || 0;
+                  const ciLower = coef.confidence_interval_lower || coef.confidenceIntervalLower || 0;
+                  const ciUpper = coef.confidence_interval_upper || coef.confidenceIntervalUpper || 0;
+                  
+                  // Определяем отображаемое имя переменной
+                  let displayName = varName;
+                  if (varName === "const") {
+                    displayName = "Константа";
+                  } else if (varName === "a") {
+                    displayName = "a";
+                  } else if (varName === "b") {
+                    displayName = "b";
+                  } else if (varName === "c") {
+                    displayName = "c";
+                  } else if (varName === "d") {
+                    displayName = "d";
+                  } else if (varName.startsWith(indepVar + "^")) {
+                    displayName = `${indepVar}^${varName.split("^")[1]}`;
+                  } else if (varName.match(/^c\d+$/)) {
+                    const degree = parseInt(varName.substring(1));
+                    if (degree === 0) displayName = "Константа";
+                    else if (degree === 1) displayName = indepVar;
+                    else displayName = `${indepVar}^${degree}`;
+                  } else if (indepVar && varName === indepVar) {
+                    displayName = indepVar;
+                  } else if (modelType === "Quadratic" && varName.includes("**2")) {
+                    displayName = `${indepVar}²`;
+                  }
+                  
+                  return (
+                    <TableRow key={`coef-${index}`}>
+                      <TableCell>{displayName}</TableCell>
+                      <TableCell>{formatNumber(coef.coefficient)}</TableCell>
+                      <TableCell>{formatNumber(stdError)}</TableCell>
+                      <TableCell>{formatNumber(tStat)}</TableCell>
+                      <TableCell>{formatNumber(pValue, 3, true)}</TableCell>
+                      <TableCell>[{formatNumber(ciLower)}, {formatNumber(ciUpper)}]</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
           </div>
         )}
 
@@ -674,32 +763,40 @@ const AnalysisResultPage: React.FC = () => {
         {sortedModels.length > 1 && (
           <div className="mt-6">
             <h4 className="font-semibold mb-2">Сравнение моделей регрессии</h4>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Тип модели</TableHead>
-                  <TableHead>R²</TableHead>
-                  <TableHead>Скорр. R²</TableHead>
-                  <TableHead>SSE</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sortedModels.map((model, index) => {
-                  const modelRegType = model.regression_type || model.regressionType || "";
-                  return (
-                    <TableRow 
-                      key={`model-${index}`} 
-                      className={(modelRegType === selectedModelType) ? "bg-primary/20 font-medium border-l-4 border-l-primary" : ""}
-                    >
-                      <TableCell>{regressionTypeTranslations[modelRegType] || modelRegType}</TableCell>
-                      <TableCell>{formatNumber(model.r_squared || model.rSquared)}</TableCell>
-                      <TableCell>{formatNumber(model.adjusted_r_squared || model.adjustedRSquared)}</TableCell>
-                      <TableCell>{formatNumber(model.sse)}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+            <div className="w-full overflow-auto">
+              <Table className="w-full">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-1/5">Тип модели</TableHead>
+                    <TableHead className="w-1/5">R²</TableHead>
+                    <TableHead className="w-1/5">Скорр. R²</TableHead>
+                    <TableHead className="w-1/5">F-статистика</TableHead>
+                    <TableHead className="w-1/5">SSE</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sortedModels.map((model, index) => {
+                    const modelRegType = model.regression_type || model.regressionType || "";
+                    return (
+                      <TableRow 
+                        key={`model-${index}`}
+                        className={(modelRegType === selectedModelType) ? "bg-primary/20 font-medium border-l-4 border-l-primary" : ""}
+                      >
+                        <TableCell>{regressionTypeTranslations[modelRegType] || modelRegType}</TableCell>
+                        <TableCell>{formatNumber(model.r_squared || model.rSquared)}</TableCell>
+                        <TableCell>{formatNumber(model.adjusted_r_squared || model.adjustedRSquared)}</TableCell>
+                        <TableCell>
+                          {modelRegType === "Sigmoid" || modelRegType === "Trigonometric" 
+                            ? "Не применимо" 
+                            : formatNumber(model.f_statistic || model.fStatistic)}
+                        </TableCell>
+                        <TableCell>{formatNumber(model.sse)}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           </div>
         )}
       </div>
@@ -842,37 +939,6 @@ const AnalysisResultPage: React.FC = () => {
                     <CardTitle>Тесты на Нормальность</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-6">
-                    {/* Дополнительная проверка для отладки */}
-                    <div className="bg-gray-100 p-2 mb-4 rounded text-xs">
-                      <details>
-                        <summary className="cursor-pointer font-semibold">Отладочная информация</summary>
-                        <p>Наличие результатов: {JSON.stringify(results !== null)}</p>
-                        <p>Тип normality_tests: {typeof results.normality_tests}</p>
-                        <p>normality_tests !== undefined: {JSON.stringify(results.normality_tests !== undefined)}</p>
-                        
-                        {results.normality_tests && (
-                          <>
-                            <p>Тип shapiroWilkResults: {typeof results.normality_tests.shapiroWilkResults}</p>
-                            <p>shapiroWilkResults !== undefined: {JSON.stringify(results.normality_tests.shapiroWilkResults !== undefined)}</p>
-                            <p>Длина shapiroWilkResults: {Array.isArray(results.normality_tests.shapiroWilkResults) ? 
-                               results.normality_tests.shapiroWilkResults.length : "не массив"}</p>
-                            
-                            <p>Тип chiSquareResults: {typeof results.normality_tests.chiSquareResults}</p>
-                            <p>chiSquareResults !== undefined: {JSON.stringify(results.normality_tests.chiSquareResults !== undefined)}</p>
-                            <p>Длина chiSquareResults: {Array.isArray(results.normality_tests.chiSquareResults) ? 
-                               results.normality_tests.chiSquareResults.length : "не массив"}</p>
-                            
-                            <div className="mt-2">
-                              <p className="font-semibold">Содержимое normality_tests:</p>
-                              <pre className="text-[9px] overflow-auto max-h-40">
-                                {JSON.stringify(results.normality_tests, null, 2)}
-                              </pre>
-                            </div>
-                          </>
-                        )}
-                      </details>
-                    </div>
-
                     {/* Shapiro-Wilk Test Results */}
                     {results.normality_tests && 
                      results.normality_tests.shapiroWilkResults && 
@@ -891,9 +957,6 @@ const AnalysisResultPage: React.FC = () => {
                           </TableHeader>
                           <TableBody>
                             {results.normality_tests.shapiroWilkResults.map((test, index) => {
-                              // Отладочная информация о структуре теста
-                              console.log(`Тест ${index}:`, test);
-                              
                               // Приводим к правильному формату имен полей (camelCase)
                               const formattedTest = {
                                 columnName: test.columnName || "неизвестная переменная",
@@ -946,9 +1009,6 @@ const AnalysisResultPage: React.FC = () => {
                           </TableHeader>
                           <TableBody>
                             {results.normality_tests.chiSquareResults.map((test, index) => {
-                              // Отладочная информация о структуре теста
-                              console.log(`Тест Chi-Square ${index}:`, test);
-                              
                               // Приводим к правильному формату имен полей (camelCase)
                               const formattedTest = {
                                 columnName: test.columnName || "неизвестная переменная",
@@ -999,17 +1059,6 @@ const AnalysisResultPage: React.FC = () => {
                       <div className="mt-8">
                         <h3 className="text-lg font-semibold mb-4">Гистограммы распределения с наложенной нормальной кривой</h3>
                         
-                        {/* Отладочная информация */}
-                        <div className="bg-gray-100 p-2 mb-4 rounded text-xs">
-                          <details>
-                            <summary className="cursor-pointer font-semibold">Отладочная информация о гистограммах</summary>
-                            <p>Количество гистограмм: {histogramChartDataForDistributionChart.length}</p>
-                            <p>Имена переменных в гистограммах: {histogramChartDataForDistributionChart.map(h => h.name).join(', ')}</p>
-                            <p>Имена переменных в тестах Шапиро-Уилка: {results.normality_tests.shapiroWilkResults?.map(t => t.columnName).join(', ') || 'нет'}</p>
-                            <p>Имена переменных в тестах Хи-квадрат: {results.normality_tests.chiSquareResults?.map(t => t.columnName).join(', ') || 'нет'}</p>
-                          </details>
-                        </div>
-                        
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           {(() => {
                             // Получаем список всех переменных из тестов нормальности
@@ -1050,7 +1099,6 @@ const AnalysisResultPage: React.FC = () => {
                                 !histogramChartDataForDistributionChart.some(histData => 
                                   Array.from(normalityVariables).some(normVar => matchVariableName(histData.name, normVar))
                                 )) {
-                              console.log("Имена переменных не совпадают, отображаю все гистограммы");
                               return histogramChartDataForDistributionChart.map((histData, index) => (
                                 <div key={`norm-hist-${index}-${histData.name}`} className="border rounded-lg p-4">
                                   <h4 className="text-md font-semibold mb-2 text-center">{histData.name}</h4>

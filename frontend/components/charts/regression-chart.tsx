@@ -381,6 +381,9 @@ export function RegressionChart({ data, models, dependentVar, independentVar, he
 
   // Найти модель с остатками для анализа
   const modelWithResiduals = models.find(model => model.residuals && model.residuals.length > 0 && model.residuals_analysis);
+  
+  // Найти текущую выбранную модель (даже если нет анализа остатков)
+  const currentModel = models.length > 0 ? models[0] : null;
 
   return (
     <div ref={containerRef} className="w-full overflow-x-auto">
@@ -409,6 +412,8 @@ export function RegressionChart({ data, models, dependentVar, independentVar, he
           />
         </div>
       )}
+      
+
     </div>
   );
 }

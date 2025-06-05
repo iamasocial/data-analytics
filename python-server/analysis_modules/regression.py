@@ -227,32 +227,32 @@ def perform_simple_linear_regression(df: pd.DataFrame, dependent_var: str = None
                     bounds = ([1e-9, b_low_trig, -np.pi, -np.inf], [np.inf, b_high_trig, np.pi, np.inf])
                     method_for_curve_fit = 'trf'; current_maxfev = max(current_maxfev, 30000 * current_n_params)
 
-                if reg_type == "Sigmoid":
-                    y_min_s, y_max_s = np.min(y_data), np.max(y_data)
-                    x_min_s, x_max_s = np.min(x_data), np.max(x_data)
-                    l_param0 = y_max_s
-                    if abs(y_max_s - y_min_s) < 1e-6: l_param0 = y_max_s + 1.0 if abs(y_max_s) < 1e-6 else y_max_s
-                    x0_0 = np.median(x_data)
-                    k0_val = 1.0
-                    y_range_s = y_max_s - y_min_s; x_range_s = x_max_s - x_min_s
-                    if x_range_s > 1e-6 and y_range_s > 1e-6:
-                        try: 
-                            slope_sign = np.sign(np.polyfit(x_data, y_data, 1)[0])
-                            k0_val = slope_sign * 4 / (x_range_s * 0.5) 
-                            k0_val = np.clip(k0_val, -100/ (x_range_s if x_range_s >0.1 else 0.1), 100 / (x_range_s if x_range_s > 0.1 else 0.1) )
-                            if abs(k0_val) < 1e-3: k0_val = slope_sign * 1e-3 if k0_val !=0 else 1e-3
-                        except: pass
-                    p0 = [k0_val, x0_0, l_param0] 
-                    l_low_bound = y_min_s - 0.2 * abs(y_range_s); l_high_bound = y_max_s + 0.2 * abs(y_range_s)
-                    if abs(y_range_s) < 1e-3: 
-                        l_low_bound = min(y_min_s, l_param0) - 0.5 * abs(l_param0 if l_param0 !=0 else 1.0)
-                        l_high_bound = max(y_max_s, l_param0) + 0.5 * abs(l_param0 if l_param0 !=0 else 1.0)
-                    if l_high_bound <= l_low_bound + 1e-3 : l_high_bound = l_low_bound + max(1.0, 0.1*abs(l_low_bound))
-                    x_range_s_eff = x_range_s if x_range_s > 1e-6 else 1.0 
-                    k_abs_max = 1000 / (x_range_s_eff if x_range_s_eff > 0.01 else 0.01)
-                    bounds = ([-k_abs_max, x_min_s - 0.1*x_range_s_eff, l_low_bound], 
-                              [k_abs_max,  x_max_s + 0.1*x_range_s_eff,  l_high_bound])
-                    method_for_curve_fit = 'trf'; current_maxfev = max(current_maxfev, 30000 * current_n_params)
+                    if reg_type == "Sigmoid":
+                        y_min_s, y_max_s = np.min(y_data), np.max(y_data)
+                        x_min_s, x_max_s = np.min(x_data), np.max(x_data)
+                        l_param0 = y_max_s
+                        if abs(y_max_s - y_min_s) < 1e-6: l_param0 = y_max_s + 1.0 if abs(y_max_s) < 1e-6 else y_max_s
+                        x0_0 = np.median(x_data)
+                        k0_val = 1.0
+                        y_range_s = y_max_s - y_min_s; x_range_s = x_max_s - x_min_s
+                        if x_range_s > 1e-6 and y_range_s > 1e-6:
+                            try: 
+                                slope_sign = np.sign(np.polyfit(x_data, y_data, 1)[0])
+                                k0_val = slope_sign * 4 / (x_range_s * 0.5) 
+                                k0_val = np.clip(k0_val, -100/ (x_range_s if x_range_s >0.1 else 0.1), 100 / (x_range_s if x_range_s > 0.1 else 0.1) )
+                                if abs(k0_val) < 1e-3: k0_val = slope_sign * 1e-3 if k0_val !=0 else 1e-3
+                            except: pass
+                        p0 = [k0_val, x0_0, l_param0] 
+                        l_low_bound = y_min_s - 0.2 * abs(y_range_s); l_high_bound = y_max_s + 0.2 * abs(y_range_s)
+                        if abs(y_range_s) < 1e-3: 
+                            l_low_bound = min(y_min_s, l_param0) - 0.5 * abs(l_param0 if l_param0 !=0 else 1.0)
+                            l_high_bound = max(y_max_s, l_param0) + 0.5 * abs(l_param0 if l_param0 !=0 else 1.0)
+                        if l_high_bound <= l_low_bound + 1e-3 : l_high_bound = l_low_bound + max(1.0, 0.1*abs(l_low_bound))
+                        x_range_s_eff = x_range_s if x_range_s > 1e-6 else 1.0 
+                        k_abs_max = 1000 / (x_range_s_eff if x_range_s_eff > 0.01 else 0.01)
+                        bounds = ([-k_abs_max, x_min_s - 0.1*x_range_s_eff, l_low_bound], 
+                                  [k_abs_max,  x_max_s + 0.1*x_range_s_eff,  l_high_bound])
+                        method_for_curve_fit = 'trf'; current_maxfev = max(current_maxfev, 30000 * current_n_params)
                 
                 if reg_type == "Linear (curve_fit)":
                     slope_init = (np.mean(y_data*x_data) - np.mean(y_data)*np.mean(x_data)) / (np.mean(x_data**2) - np.mean(x_data)**2) if np.var(x_data)>1e-9 else 1.0
@@ -261,9 +261,9 @@ def perform_simple_linear_regression(df: pd.DataFrame, dependent_var: str = None
                     if np.isnan(intercept_init) or np.isinf(intercept_init): intercept_init = 0.0
                     p0 = [slope_init, intercept_init]
 
-                if reg_type in ["Power", "Logarithmic"] and np.any(x_data <= 1e-9):
-                    logs.append(log_prefix + f"Skipped {reg_type} (non-positive X values).")
-                    continue
+                    if reg_type in ["Power", "Logarithmic"] and np.any(x_data <= 1e-9):
+                        logs.append(log_prefix + f"Skipped {reg_type} (non-positive X values).")
+                        continue
 
                 params, pcov = curve_fit(func, x_data, y_data, p0=p0, bounds=bounds, method=method_for_curve_fit, maxfev=current_maxfev, check_finite=True, ftol=1e-7, xtol=1e-7, gtol=1e-7)
                 
@@ -315,8 +315,8 @@ def perform_simple_linear_regression(df: pd.DataFrame, dependent_var: str = None
                 
                 coefficients_cf = []
                 param_names_map = {
-                    "Power": ["a", "b"], "Logarithmic": ["a", "b"],
-                    "Quadratic": ["a", "b", "c"], "Trigonometric": ["a", "b", "c", "d"],
+                        "Power": ["a", "b"], "Logarithmic": ["a", "b"],
+                        "Quadratic": ["a", "b", "c"], "Trigonometric": ["a", "b", "c", "d"],
                     "Sigmoid": ["a", "b", "c"],
                     "Linear (curve_fit)": [x_col_name, "const"] 
                 }
@@ -398,7 +398,7 @@ def perform_simple_linear_regression(df: pd.DataFrame, dependent_var: str = None
                  logs.append(log_prefix + f"Skipped {reg_type} (ValueError: {ve_cf}).")
             except Exception as e_cf_model: 
                 logs.append(log_prefix + f"Skipped {reg_type} (Unexpected error: {e_cf_model}). Details: {str(e_cf_model)}")
-        
+
         results_list.extend(all_models_for_pair)
 
     if not results_list:

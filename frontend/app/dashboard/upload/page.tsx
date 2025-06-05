@@ -1195,7 +1195,7 @@ export default function UploadPage() {
                                     ))}
                                 </TableBody>
                             </Table>
-                        </div>
+                      </div>
                     )}
 
                           {/* Таблица сравнения моделей */} 
@@ -1206,7 +1206,7 @@ export default function UploadPage() {
                       <TableHeader>
                         <TableRow>
                                   <TableHead>Тип модели</TableHead>
-                                                                            <TableHead className="text-right">R²</TableHead>
+                                    <TableHead className="text-right">R²</TableHead>
                                     <TableHead className="text-right">Скорр. R²</TableHead>
                                     <TableHead className="text-right">F-статистика</TableHead>
                                     <TableHead className="text-right">SSE</TableHead>
