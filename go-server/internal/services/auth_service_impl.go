@@ -2,9 +2,11 @@ package services
 
 import (
 	"context"
+	"diploma/go-server/internal/common"
 	"diploma/go-server/internal/models"
 	"diploma/go-server/internal/repository"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5" // Импорт JWT
@@ -105,4 +107,53 @@ func (s *authService) LoginUser(ctx context.Context, email string, password stri
 	user.PasswordHash = ""
 
 	return tokenString, user, nil
+}
+
+// Добавляем реализацию ChangePassword для смены пароля пользователя
+func (s *authService) ChangePassword(ctx context.Context, currentPassword string, newPassword string) error {
+	// Получаем ID пользователя из контекста
+	userIDRaw := ctx.Value(common.UserIDKey)
+	if userIDRaw == nil {
+		return fmt.Errorf("user ID not found in context")
+	}
+	
+	// Преобразуем ID пользователя из строки в число
+	userID, err := strconv.Atoi(fmt.Sprint(userIDRaw))
+	if err != nil {
+		return fmt.Errorf("invalid user ID format in context: %w", err)
+	}
+
+	// Получаем пользователя из базы данных
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("error getting user by ID: %w", err)
+	}
+	if user == nil {
+		return fmt.Errorf("user not found")
+	}
+
+	// Проверяем правильность текущего пароля
+	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(currentPassword))
+	if err != nil {
+		return fmt.Errorf("current password is incorrect")
+	}
+
+	// Проверяем требования к новому паролю
+	if len(newPassword) < 8 {
+		return fmt.Errorf("new password must be at least 8 characters long")
+	}
+
+	// Хэширование нового пароля
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("failed to hash new password: %w", err)
+	}
+
+	// Обновляем пароль в базе данных
+	user.PasswordHash = string(hashedPassword)
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		return fmt.Errorf("failed to update user password: %w", err)
+	}
+
+	return nil
 }

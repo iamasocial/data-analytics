@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { z } from "zod"
@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { useTranslation } from "@/components/language-provider"
 import { LanguageSwitcher } from "@/components/language-switcher"
+import { clearAllAuthData } from "@/lib/auth"
 
 const loginSchema = z.object({
   email: z.string().email({
@@ -29,6 +30,16 @@ export default function LoginPage() {
   const router = useRouter()
   const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
+  
+  // При загрузке страницы входа очищаем все токены авторизации
+  useEffect(() => {
+    // Очистка всех данных авторизации при открытии страницы входа
+    if (typeof window !== 'undefined') {
+      console.log("Страница входа: удаляем все данные авторизации");
+      clearAllAuthData();
+      console.log("Проверка очистки:", localStorage.getItem('authToken'));
+    }
+  }, [])
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),

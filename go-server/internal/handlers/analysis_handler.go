@@ -301,6 +301,13 @@ func (h *AnalysisHandler) HandleGetAnalysisRunResults(c *gin.Context) {
 	resultsMap, err := h.service.GetAnalysisRunResults(c.Request.Context(), runID)
 	if err != nil {
 		log.Printf("Error getting analysis run results from service for runID %d: %v", runID, err)
+		
+		// Проверяем, является ли ошибка отказом в доступе
+		if strings.Contains(err.Error(), "access denied") {
+			c.JSON(http.StatusForbidden, gin.H{"error": fmt.Sprintf("У вас нет доступа к результатам анализа #%d", runID)})
+			return
+		}
+		
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve analysis results"})
 		return
 	}
@@ -316,4 +323,42 @@ func (h *AnalysisHandler) HandleGetAnalysisRunResults(c *gin.Context) {
 	log.Printf("Handler: Successfully retrieved results for analysis run ID %d.", runID)
 	// Отправляем напрямую карту, так как значения в ней уже json.RawMessage (байты JSON)
 	c.JSON(http.StatusOK, resultsMap)
+}
+
+// HandleDeleteAnalysisRun обрабатывает запрос на удаление анализа по ID
+func (h *AnalysisHandler) HandleDeleteAnalysisRun(c *gin.Context) {
+	// Получаем ID анализа из URL параметров
+	runIDParam := c.Param("runId")
+	if runIDParam == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing runId parameter"})
+		return
+	}
+
+	// Преобразуем строковый ID в число
+	runID, err := strconv.ParseInt(runIDParam, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid runId format"})
+		return
+	}
+
+	// Вызываем сервисный метод для удаления анализа
+	err = h.service.DeleteAnalysisRun(c.Request.Context(), runID)
+	if err != nil {
+		// Проверяем тип ошибки
+		if strings.Contains(err.Error(), "access denied") {
+			c.JSON(http.StatusForbidden, gin.H{"error": fmt.Sprintf("У вас нет доступа к удалению анализа #%d", runID)})
+			return
+		}
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("Анализ #%d не найден", runID)})
+			return
+		}
+		
+		log.Printf("Error deleting analysis run #%d: %v", runID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete analysis run"})
+		return
+	}
+
+	// Возвращаем успешный статус
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": fmt.Sprintf("Анализ #%d успешно удален", runID)})
 }

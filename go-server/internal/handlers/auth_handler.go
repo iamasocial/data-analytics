@@ -29,6 +29,12 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
+// ChangePasswordRequest представляет тело запроса для смены пароля.
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password" binding:"required"`
+	NewPassword     string `json:"new_password" binding:"required,min=8"`
+}
+
 // Register обрабатывает запрос на регистрацию нового пользователя.
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req RegisterRequest
@@ -63,6 +69,34 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Login successful", "token": token, "user_id": user.ID, "email": user.Email})
+}
+
+// ChangePassword обрабатывает запрос на изменение пароля пользователя.
+func (h *AuthHandler) ChangePassword(c *gin.Context) {
+	var req ChangePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body: " + err.Error()})
+		return
+	}
+
+	err := h.authService.ChangePassword(c.Request.Context(), req.CurrentPassword, req.NewPassword)
+	if err != nil {
+		// Проверяем тип ошибки для возврата подходящего статуса ответа
+		if err.Error() == "current password is incorrect" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			return
+		}
+		
+		if err.Error() == "new password must be at least 8 characters long" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to change password: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Password changed successfully"})
 }
 
 // RegisterRoutes регистрирует маршруты аутентификации.

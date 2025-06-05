@@ -14,5 +14,6 @@ type AnalysisService interface {
 	GetFileColumns(ctx context.Context, fileContent []byte, fileName string) ([]string, error)
 	GetUserAnalysisHistory(ctx context.Context) ([]models.AnalysisRun, error)
 	GetAnalysisRunResults(ctx context.Context, runID int64) (map[string]json.RawMessage, error)
+	DeleteAnalysisRun(ctx context.Context, runID int64) error
 	// TODO: Add methods for retrieving past analysis results for a user
 }

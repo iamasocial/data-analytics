@@ -7,6 +7,17 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useTranslation } from "@/components/language-provider"
 import { Upload, FileText, Eye, Trash2, BarChart2, PieChart } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { useToast } from "@/components/ui/use-toast"
 
 // Интерфейс для данных с бэкенда
 interface AnalysisRun {
@@ -21,50 +32,112 @@ interface AnalysisRun {
 
 export default function DashboardPage() {
   const { t } = useTranslation()
+  const { toast } = useToast()
   const [analysisHistory, setAnalysisHistory] = useState<AnalysisRun[]>([])
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState<boolean>(false)
+  const [analysisToDelete, setAnalysisToDelete] = useState<number | null>(null)
 
   useEffect(() => {
-    const fetchHistory = async () => {
-      setLoading(true);
-      setError(null);
-      console.log("[DashboardPage] Attempting to get token from localStorage with key 'authToken'.");
-      const token = localStorage.getItem('authToken');
-      console.log("[DashboardPage] Token from localStorage (key 'authToken'):", token);
-
-      if (!token) {
-        console.error("[DashboardPage] Token not found in localStorage (key 'authToken').");
-        // Возможно, здесь стоит перенаправить на страницу логина
-        // setLoading(false); // Убедитесь, что загрузка сбрасывается, если токена нет
-        return;
-      }
-      console.log("[DashboardPage] Token found (key 'authToken'), proceeding to fetch history.");
-
-      try {
-        const response = await fetch('http://localhost:8080/api/analyses/history', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || `Ошибка при загрузке истории: ${response.statusText}`);
-        }
-
-        const data: AnalysisRun[] = await response.json();
-        setAnalysisHistory(data);
-      } catch (err: any) {
-        setError(err.message || 'Произошла неизвестная ошибка.');
-        console.error("Fetch history error:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchHistory();
   }, []);
+
+  const fetchHistory = async () => {
+    setLoading(true);
+    setError(null);
+    console.log("[DashboardPage] Attempting to get token from localStorage with key 'authToken'.");
+    const token = localStorage.getItem('authToken');
+    console.log("[DashboardPage] Token from localStorage (key 'authToken'):", token);
+
+    if (!token) {
+      console.error("[DashboardPage] Token not found in localStorage (key 'authToken').");
+      // Возможно, здесь стоит перенаправить на страницу логина
+      // setLoading(false); // Убедитесь, что загрузка сбрасывается, если токена нет
+      return;
+    }
+    console.log("[DashboardPage] Token found (key 'authToken'), proceeding to fetch history.");
+
+    try {
+      const response = await fetch('http://localhost:8080/api/analyses/history', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Ошибка при загрузке истории: ${response.statusText}`);
+      }
+
+      const data: AnalysisRun[] = await response.json();
+      setAnalysisHistory(data);
+    } catch (err: any) {
+      setError(err.message || 'Произошла неизвестная ошибка.');
+      console.error("Fetch history error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteClick = (id: number) => {
+    setAnalysisToDelete(id);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (analysisToDelete === null) return;
+    
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      setError('Требуется авторизация');
+      return;
+    }
+    
+    try {
+      const response = await fetch(`http://localhost:8080/api/analyses/history/${analysisToDelete}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Ошибка при удалении анализа: ${response.statusText}`);
+      }
+      
+      // Обновляем список после удаления
+      setAnalysisHistory(prevHistory => 
+        prevHistory.filter(item => item.id !== analysisToDelete)
+      );
+      
+      // Показываем уведомление об успехе
+      toast({
+        title: t("deleteSuccess"),
+        description: `ID: ${analysisToDelete}`,
+        variant: "default",
+      });
+    } catch (err: any) {
+      setError(err.message || 'Ошибка при удалении анализа');
+      console.error("Delete analysis error:", err);
+      
+      // Показываем уведомление об ошибке
+      toast({
+        title: t("deleteError"),
+        description: err.message || t("deleteError"),
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleteDialogOpen(false);
+      setAnalysisToDelete(null);
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setIsDeleteDialogOpen(false);
+    setAnalysisToDelete(null);
+  };
 
   const displayedHistory = analysisHistory;
 
@@ -92,7 +165,7 @@ export default function DashboardPage() {
         </Button>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-1">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Всего анализов</CardTitle>
@@ -100,24 +173,6 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{displayedHistory.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Успешных анализов</CardTitle>
-            <BarChart2 className="h-4 w-4 text-gray-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">N/A</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Объем данных</CardTitle>
-            <PieChart className="h-4 w-4 text-gray-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">N/A</div>
           </CardContent>
         </Card>
       </div>
@@ -152,7 +207,9 @@ export default function DashboardPage() {
                   <TableRow key={item.id}>
                     <TableCell>{new Date(item.run_at).toLocaleDateString()}</TableCell>
                     <TableCell>{item.file_name}</TableCell>
-                    <TableCell>{item.selected_analyses.join(', ')}</TableCell>
+                    <TableCell>
+                      {item.selected_analyses.map(analysis => t(analysis)).join(', ')}
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button variant="ghost" size="icon" asChild>
@@ -161,7 +218,12 @@ export default function DashboardPage() {
                             <span className="sr-only">{t("view")}</span>
                           </Link>
                         </Button>
-                        <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => alert('Функция удаления еще не реализована')}>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="text-red-500 hover:text-red-600 hover:bg-red-50" 
+                          onClick={() => handleDeleteClick(item.id)}
+                        >
                           <Trash2 className="h-4 w-4" />
                           <span className="sr-only">{t("delete")}</span>
                         </Button>
@@ -182,6 +244,27 @@ export default function DashboardPage() {
           </Button>
         </CardFooter>
       </Card>
+      
+      {/* Диалог подтверждения удаления */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("deleteConfirmTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("deleteConfirmDescription")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleDeleteCancel}>{t("cancel")}</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteConfirm}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {t("delete")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

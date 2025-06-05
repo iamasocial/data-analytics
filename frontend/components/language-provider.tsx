@@ -196,6 +196,34 @@ const translations: Translations = {
     ru: "Модели регрессии",
     en: "Regression Models"
   },
+  descriptive_stats: {
+    ru: "Описательная статистика",
+    en: "Descriptive Statistics"
+  },
+  normality_test: {
+    ru: "Проверка нормальности",
+    en: "Normality Test"
+  },
+  regression: {
+    ru: "Регрессионный анализ",
+    en: "Regression Analysis"
+  },
+  deleteConfirmTitle: {
+    ru: "Вы уверены?",
+    en: "Are you sure?"
+  },
+  deleteConfirmDescription: {
+    ru: "Это действие нельзя отменить. Результаты анализа будут удалены навсегда.",
+    en: "This action cannot be undone. Analysis results will be permanently deleted."
+  },
+  deleteSuccess: {
+    ru: "Анализ успешно удален",
+    en: "Analysis successfully deleted"
+  },
+  deleteError: {
+    ru: "Ошибка при удалении анализа",
+    en: "Error deleting analysis"
+  }
 }
 
 type LanguageContextType = {

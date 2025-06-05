@@ -212,6 +212,57 @@ func (s *analysisService) GetAnalysisRunResults(ctx context.Context, runID int64
 	// что доступ к этому методу уже защищен и runID принадлежит пользователю.
 	// Однако, для большей безопасности можно было бы добавить проверку, что runID принадлежит текущему userID.
 	// Пока что для простоты опустим эту проверку.
+	
+	// Получаем ID пользователя из контекста
+	userIDRaw := ctx.Value(common.UserIDKey)
+	if userIDRaw == nil {
+		log.Println("Error: User ID not found in context for GetAnalysisRunResults")
+		return nil, fmt.Errorf("user ID not found in context, authentication required")
+	}
+
+	var userID int
+	switch v := userIDRaw.(type) {
+	case float64:
+		userID = int(v)
+	case int:
+		userID = v
+	case string:
+		parsedID, err := strconv.Atoi(v)
+		if err != nil {
+			log.Printf("Error converting userID '%s' to int in GetAnalysisRunResults: %v", v, err)
+			return nil, fmt.Errorf("invalid user ID format in context")
+		}
+		userID = parsedID
+	default:
+		log.Printf("Error: User ID in context is of an unexpected type in GetAnalysisRunResults: %T", v)
+		return nil, fmt.Errorf("invalid user ID format in context")
+	}
+
+	if userID == 0 {
+		log.Println("Error: User ID is invalid after type assertion/conversion in GetAnalysisRunResults")
+		return nil, fmt.Errorf("invalid user ID format in context (zero value)")
+	}
+	
+	// Получаем информацию о запуске анализа, чтобы проверить принадлежность пользователю
+	runs, err := s.analysisRepo.GetAnalysisRunsByUserID(ctx, userID)
+	if err != nil {
+		log.Printf("Error getting analysis runs from repository for user %d: %v", userID, err)
+		return nil, fmt.Errorf("failed to verify access rights for analysis run %d: %w", runID, err)
+	}
+	
+	// Проверяем, принадлежит ли запрошенный runID текущему пользователю
+	var belongsToUser bool
+	for _, run := range runs {
+		if run.ID == runID {
+			belongsToUser = true
+			break
+		}
+	}
+	
+	if !belongsToUser {
+		log.Printf("Warning: User %d attempted to access analysis run %d which does not belong to them", userID, runID)
+		return nil, fmt.Errorf("access denied: analysis run %d does not belong to current user", runID)
+	}
 
 	resultsData, err := s.analysisRepo.GetAnalysisResultsByRunID(ctx, runID)
 	if err != nil {
@@ -233,4 +284,61 @@ func (s *analysisService) GetAnalysisRunResults(ctx context.Context, runID int64
 
 	log.Printf("Service: Successfully retrieved %d result types for analysis run ID %d", len(resultsMap), runID)
 	return resultsMap, nil
+}
+
+// DeleteAnalysisRun удаляет запись о выполненном анализе и его результаты
+func (s *analysisService) DeleteAnalysisRun(ctx context.Context, runID int64) error {
+	log.Printf("Service: Deleting analysis run ID %d", runID)
+
+	// Получаем ID пользователя из контекста
+	userIDRaw := ctx.Value(common.UserIDKey)
+	if userIDRaw == nil {
+		log.Println("Error: Missing user ID in context")
+		return fmt.Errorf("missing user ID in context")
+	}
+
+	// Преобразуем ID пользователя в число
+	userID, err := strconv.Atoi(fmt.Sprint(userIDRaw))
+	if err != nil {
+		log.Printf("Error: Invalid user ID format: %v", err)
+		return fmt.Errorf("invalid user ID format: %w", err)
+	}
+
+	// Получаем список анализов пользователя
+	runs, err := s.analysisRepo.GetAnalysisRunsByUserID(ctx, userID)
+	if err != nil {
+		log.Printf("Error getting user's analysis runs: %v", err)
+		return fmt.Errorf("failed to get user analysis runs: %w", err)
+	}
+
+	// Проверяем, принадлежит ли указанный runID текущему пользователю
+	found := false
+	for _, run := range runs {
+		if run.ID == runID {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		log.Printf("Error: User %d attempted to delete analysis run %d which they don't own", userID, runID)
+		return fmt.Errorf("access denied: analysis run #%d does not belong to current user", runID)
+	}
+
+	// Удаление результатов анализа
+	err = s.analysisRepo.DeleteAnalysisResults(ctx, runID)
+	if err != nil {
+		log.Printf("Error deleting analysis results for run ID %d: %v", runID, err)
+		return fmt.Errorf("failed to delete analysis results: %w", err)
+	}
+
+	// Удаление записи о запуске анализа
+	err = s.analysisRepo.DeleteAnalysisRun(ctx, runID)
+	if err != nil {
+		log.Printf("Error deleting analysis run ID %d: %v", runID, err)
+		return fmt.Errorf("failed to delete analysis run: %w", err)
+	}
+
+	log.Printf("Successfully deleted analysis run ID %d and its results", runID)
+	return nil
 }

@@ -118,6 +118,8 @@ func main() {
 		apiProtected.POST("/columns", analysisHandler.HandleGetColumns)                                   // Используем метод хендлера напрямую
 		apiProtected.GET("/analyses/history", analysisHandler.HandleGetUserAnalysisHistory)               // Новый маршрут
 		apiProtected.GET("/analyses/history/:runId/results", analysisHandler.HandleGetAnalysisRunResults) // Новый маршрут для деталей
+		apiProtected.DELETE("/analyses/history/:runId", analysisHandler.HandleDeleteAnalysisRun)          // Маршрут для удаления
+		apiProtected.POST("/user/change-password", authHandler.ChangePassword)                            // Маршрут для смены пароля
 	}
 
 	// --- Отдача статических файлов React ---

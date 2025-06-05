@@ -10,10 +10,11 @@ import { useTranslation } from "@/components/language-provider"
 import { DistributionChart } from "@/components/charts/distribution-chart"
 import { TimeSeriesChart } from "@/components/charts/time-series-chart"
 import { Download, RefreshCw, AlertCircle, CheckCircle2 } from "lucide-react"
-import { RegressionChart, calculateY } from "@/components/charts/regression-chart";
+import { RegressionChart } from "@/components/charts/regression-chart";
 import { Label } from "@/components/ui/label";
-import { QQPlot } from "@/components/charts/qq-plot"
 import { ResidualsAnalysis } from "@/components/charts/residuals-analysis"
+import { checkTokenValidity, handleUnauthorized, logout, clearAuthTokens } from "@/lib/auth"
+import { calculateGlobalYDomain } from "@/lib/chart-utils"
 
 // Тип для гистограммы
 interface Histogram {
@@ -302,6 +303,7 @@ interface RegressionChartProps {
   independentVar: string;
   height?: number;
   globalYDomain?: [number, number];
+  globalXDomain?: [number, number]; // Добавляем поддержку глобального масштаба по оси X
 }
 
 // Обновление кода для тестов нормальности в старом формате:
@@ -326,8 +328,13 @@ const AnalysisResultPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
   const [selectedModelType, setSelectedModelType] = useState<string | undefined>(undefined);
 
+  // Используем checkTokenValidity из модуля auth
+
   useEffect(() => {
     if (!id) return
+    
+    // Проверяем токен при загрузке страницы
+    if (!checkTokenValidity()) return;
 
     const fetchResultDetails = async () => {
       setLoading(true)
@@ -379,17 +386,15 @@ const AnalysisResultPage: React.FC = () => {
         if (!response.ok) {
           // Специальная обработка ошибки 401 (Unauthorized)
           if (response.status === 401) {
-            // Перенаправляем на страницу входа
-            if (typeof window !== 'undefined') {
-              localStorage.removeItem('authToken'); // Удаляем невалидный токен
-              // Сохраняем текущий URL для возврата после авторизации
-              if (window.location.pathname) {
-                localStorage.setItem('redirectAfterLogin', window.location.pathname);
-              }
-              window.location.href = '/login';
-              return; // Прерываем выполнение функции
-            }
-            throw new Error(t('session_expired'));
+            handleUnauthorized();
+            return; // Прерываем выполнение функции
+          }
+          
+          // Добавляем обработку ошибок 403 (Forbidden) и 404 (Not Found) - доступ к чужим результатам
+          if (response.status === 403 || response.status === 404) {
+            setError(t('access_denied_error') || 'У вас нет доступа к этим результатам анализа')
+            setLoading(false)
+            return;
           }
           
           const errorData = await response.json().catch(() => ({ message: t('failed_to_fetch_results_error') }));
@@ -472,6 +477,13 @@ const AnalysisResultPage: React.FC = () => {
       bins: hist.bins,
       frequencies: hist.frequencies,
     }));
+    
+  // Получаем глобальный масштаб для оси Y из утилиты
+  const globalYDomain = results?.regression_analysis ? 
+    calculateGlobalYDomain(
+      results.regression_analysis.data_points || results.regression_analysis.dataPoints || [],
+      results.regression_analysis.models || []
+    ) : undefined;
 
   // Исправляем создание пропсов для RegressionChart с поддержкой camelCase полей и добавляем анализ остатков
   const regressionChartProps: RegressionChartProps | undefined = 
@@ -507,7 +519,9 @@ const AnalysisResultPage: React.FC = () => {
                       (results.regression_analysis.independentVariables && 
                       results.regression_analysis.independentVariables.length > 0) ?
                       results.regression_analysis.independentVariables[0] : "x",
-      height: 400
+      height: 500, // Увеличиваем высоту графика для лучшего отображения
+      // Передаем глобальный домен для оси Y, чтобы все графики имели одинаковый масштаб
+      globalYDomain: globalYDomain
     } : undefined;
 
   // renderNormalityTestTable определяется здесь, до return
@@ -838,7 +852,7 @@ const AnalysisResultPage: React.FC = () => {
             hasNormalityTests ? "norm_tests" :
             results.regression_analysis ? "reg_analysis" : "logs"
           } className="w-full">
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-3 mb-4">
               {results.descriptive_stats && <TabsTrigger value="desc_stats">Описательная статистика</TabsTrigger>}
               {hasNormalityTests && <TabsTrigger value="norm_tests">Проверка нормальности</TabsTrigger>}
               {results.regression_analysis && <TabsTrigger value="reg_analysis">Модели регрессии</TabsTrigger>}
@@ -1191,12 +1205,7 @@ const AnalysisResultPage: React.FC = () => {
           </Tabs>
         </CardContent>
       </Card>
-      <div className="mt-6 flex justify-end space-x-2">
-        <Button variant="outline" onClick={() => window.location.reload()}>
-          <RefreshCw size={16} className="mr-2"/>
-          Обновить результаты
-        </Button>
-      </div>
+
     </div>
   );
 };

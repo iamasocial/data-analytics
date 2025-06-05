@@ -74,8 +74,29 @@ export default function SettingsPage() {
     setIsPasswordLoading(true)
 
     try {
-      // Имитация API запроса
-      await new Promise((resolve) => setTimeout(resolve, 1500))
+      // Получаем JWT токен из localStorage
+      const token = localStorage.getItem('authToken')
+      if (!token) {
+        throw new Error("Не найден токен авторизации")
+      }
+
+      // Отправляем запрос на сервер для смены пароля
+      const response = await fetch('http://localhost:8080/api/user/change-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          current_password: data.currentPassword,
+          new_password: data.newPassword
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Ошибка при смене пароля')
+      }
 
       // Успешное изменение пароля
       toast({
@@ -91,7 +112,7 @@ export default function SettingsPage() {
     } catch (error) {
       toast({
         title: "Ошибка",
-        description: "Произошла ошибка при изменении пароля. Пожалуйста, попробуйте снова.",
+        description: error instanceof Error ? error.message : "Произошла ошибка при изменении пароля. Пожалуйста, попробуйте снова.",
         variant: "destructive",
       })
     } finally {

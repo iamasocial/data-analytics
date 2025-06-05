@@ -72,9 +72,8 @@ func (r *postgresUserRepository) GetByEmail(ctx context.Context, email string) (
 	return user, nil
 }
 
-// GetByID (пример, если понадобится в будущем)
-/*
-func (r *postgresUserRepository) GetByID(ctx context.Context, id int64) (*models.User, error) {
+// GetByID извлекает пользователя из базы данных по его ID.
+func (r *postgresUserRepository) GetByID(ctx context.Context, id int) (*models.User, error) {
 	query := `
 		SELECT id, email, password_hash, created_at, updated_at
 		FROM users
@@ -87,10 +86,36 @@ func (r *postgresUserRepository) GetByID(ctx context.Context, id int64) (*models
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil // Пользователь не найден
+			return nil, nil // Пользователь не найден, возвращаем nil, nil
 		}
 		return nil, fmt.Errorf("failed to get user by id %d: %w", id, err)
 	}
 	return user, nil
 }
-*/
+
+// Update обновляет информацию о пользователе в базе данных.
+func (r *postgresUserRepository) Update(ctx context.Context, user *models.User) error {
+	query := `
+		UPDATE users 
+		SET email = $1, password_hash = $2, updated_at = $3
+		WHERE id = $4
+	`
+	user.UpdatedAt = time.Now() // Обновляем время изменения
+
+	result, err := r.db.ExecContext(ctx, query, user.Email, user.PasswordHash, user.UpdatedAt, user.ID)
+	if err != nil {
+		return fmt.Errorf("failed to update user: %w", err)
+	}
+
+	// Проверяем, был ли изменен хотя бы один пользователь
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("user with ID %d not found", user.ID)
+	}
+
+	return nil
+}

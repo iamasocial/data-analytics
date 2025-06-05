@@ -19,5 +19,9 @@ type UserRepository interface {
 	// GetByID находит пользователя по его ID.
 	// Возвращает nil, nil, если пользователь не найден, без ошибки.
 	// Возвращает ошибку, если произошла проблема с базой данных.
-	// GetByID(ctx context.Context, id int64) (*models.User, error) // Закомментировано, добавим при необходимости
+	GetByID(ctx context.Context, id int) (*models.User, error)
+	
+	// Update обновляет данные пользователя в хранилище.
+	// Возвращает ошибку, если пользователь не найден или произошла проблема с базой данных.
+	Update(ctx context.Context, user *models.User) error
 }

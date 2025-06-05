@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"diploma/go-server/internal/models"
+	"encoding/json"
 	"fmt"
 
 	"github.com/lib/pq" // Для работы с массивами PostgreSQL (TEXT[])
@@ -19,6 +20,14 @@ type AnalysisRepository interface {
 	GetAnalysisRunsByUserID(ctx context.Context, userID int) ([]models.AnalysisRun, error)
 	// GetAnalysisResultsByRunID извлекает все сохраненные результаты для конкретного запуска анализа.
 	GetAnalysisResultsByRunID(ctx context.Context, runID int64) ([]models.AnalysisResultData, error)
+	// GetAnalysisRunID извлекает ID последнего запуска анализа для пользователя.
+	GetAnalysisRunID(ctx context.Context) (int64, error)
+	// GetAnalysisRunResults извлекает все результаты для конкретного запуска анализа.
+	GetAnalysisRunResults(ctx context.Context, runID int64) (map[string]json.RawMessage, error)
+	// DeleteAnalysisRun удаляет запуск анализа.
+	DeleteAnalysisRun(ctx context.Context, runID int64) error
+	// DeleteAnalysisResults удаляет все результаты для конкретного запуска анализа.
+	DeleteAnalysisResults(ctx context.Context, runID int64) error
 	// TODO: Add methods like GetAnalysisResultDataByRunID
 }
 
@@ -166,4 +175,76 @@ func (r *postgresAnalysisRepository) GetAnalysisResultsByRunID(ctx context.Conte
 	}
 
 	return results, nil
+}
+
+// GetAnalysisRunID извлекает ID последнего запуска анализа для пользователя.
+func (r *postgresAnalysisRepository) GetAnalysisRunID(ctx context.Context) (int64, error) {
+	query := `
+		SELECT id
+		FROM analysis_runs
+		ORDER BY id DESC
+		LIMIT 1
+	`
+	var runID int64
+	err := r.db.QueryRowContext(ctx, query).Scan(&runID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to query analysis run ID: %w", err)
+	}
+	return runID, nil
+}
+
+// GetAnalysisRunResults извлекает все результаты для конкретного запуска анализа.
+func (r *postgresAnalysisRepository) GetAnalysisRunResults(ctx context.Context, runID int64) (map[string]json.RawMessage, error) {
+	query := `
+		SELECT result_type, data
+		FROM analysis_results_data
+		WHERE analysis_run_id = $1
+	`
+	rows, err := r.db.QueryContext(ctx, query, runID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query analysis run results for run ID %d: %w", runID, err)
+	}
+	defer rows.Close()
+
+	results := make(map[string]json.RawMessage)
+	for rows.Next() {
+		var resultType string
+		var data json.RawMessage
+		if err := rows.Scan(&resultType, &data); err != nil {
+			return nil, fmt.Errorf("failed to scan analysis run result: %w", err)
+		}
+		results[resultType] = data
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating analysis run results: %w", err)
+	}
+
+	return results, nil
+}
+
+// DeleteAnalysisRun удаляет запуск анализа.
+func (r *postgresAnalysisRepository) DeleteAnalysisRun(ctx context.Context, runID int64) error {
+	query := `
+		DELETE FROM analysis_runs
+		WHERE id = $1
+	`
+	_, err := r.db.ExecContext(ctx, query, runID)
+	if err != nil {
+		return fmt.Errorf("failed to delete analysis run: %w", err)
+	}
+	return nil
+}
+
+// DeleteAnalysisResults удаляет все результаты для конкретного запуска анализа.
+func (r *postgresAnalysisRepository) DeleteAnalysisResults(ctx context.Context, runID int64) error {
+	query := `
+		DELETE FROM analysis_results_data
+		WHERE analysis_run_id = $1
+	`
+	_, err := r.db.ExecContext(ctx, query, runID)
+	if err != nil {
+		return fmt.Errorf("failed to delete analysis results: %w", err)
+	}
+	return nil
 }

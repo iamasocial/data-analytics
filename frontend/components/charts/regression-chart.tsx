@@ -51,6 +51,7 @@ export interface RegressionChartProps {
   independentVar: string;
   height?: number; // Optional height prop
   globalYDomain?: [number, number]; // For shared Y-axis scale
+  globalXDomain?: [number, number]; // For shared X-axis scale
 }
 
 // Function to calculate Y values based on regression type and coefficients
@@ -148,7 +149,7 @@ export function calculateY(x: number, modelType: string, coefficients: {variable
   }
 }
 
-export function RegressionChart({ data, models, dependentVar, independentVar, height = 600, globalYDomain }: RegressionChartProps) {
+export function RegressionChart({ data, models, dependentVar, independentVar, height = 600, globalYDomain, globalXDomain }: RegressionChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isMounted, setIsMounted] = useState(false);
@@ -242,8 +243,14 @@ export function RegressionChart({ data, models, dependentVar, independentVar, he
       }
   
       const xScale = d3.scaleLinear()
-        .domain([xMin - xPadding, xMax + xPadding])
         .range([0, width]);
+        
+      if (globalXDomain && globalXDomain.length === 2) {
+        xScale.domain(globalXDomain);
+        console.log("[RegressionChart] Using globalXDomain:", globalXDomain);
+      } else {
+        xScale.domain([xMin - xPadding, xMax + xPadding]);
+      }
   
       // Draw axes
       svg.append("g")
@@ -377,7 +384,7 @@ export function RegressionChart({ data, models, dependentVar, independentVar, he
     return () => {
       window.removeEventListener('resize', handleResize);
     };
-  }, [isMounted, data, models, height, globalYDomain]);
+  }, [isMounted, data, models, height, globalYDomain, globalXDomain]);
 
   // Найти модель с остатками для анализа
   const modelWithResiduals = models.find(model => model.residuals && model.residuals.length > 0 && model.residuals_analysis);
