@@ -52,7 +52,7 @@ class DescriptiveStatisticsResponse(_message.Message):
     def __init__(self, descriptives: _Optional[_Iterable[_Union[DescriptiveStatistics, _Mapping]]] = ..., histograms: _Optional[_Iterable[_Union[HistogramData, _Mapping]]] = ..., confidence_intervals: _Optional[_Iterable[_Union[ConfidenceInterval, _Mapping]]] = ...) -> None: ...
 
 class DescriptiveStatistics(_message.Message):
-    __slots__ = ("variable_name", "count", "mean", "median", "mode", "variance", "std_dev", "variation_coefficient", "skewness", "kurtosis", "min_value", "max_value")
+    __slots__ = ("variable_name", "count", "mean", "median", "mode", "variance", "std_dev", "variation_coefficient", "skewness", "kurtosis", "min_value", "max_value", "q1", "q3", "iqr")
     VARIABLE_NAME_FIELD_NUMBER: _ClassVar[int]
     COUNT_FIELD_NUMBER: _ClassVar[int]
     MEAN_FIELD_NUMBER: _ClassVar[int]
@@ -65,6 +65,9 @@ class DescriptiveStatistics(_message.Message):
     KURTOSIS_FIELD_NUMBER: _ClassVar[int]
     MIN_VALUE_FIELD_NUMBER: _ClassVar[int]
     MAX_VALUE_FIELD_NUMBER: _ClassVar[int]
+    Q1_FIELD_NUMBER: _ClassVar[int]
+    Q3_FIELD_NUMBER: _ClassVar[int]
+    IQR_FIELD_NUMBER: _ClassVar[int]
     variable_name: str
     count: str
     mean: float
@@ -77,17 +80,28 @@ class DescriptiveStatistics(_message.Message):
     kurtosis: float
     min_value: float
     max_value: float
-    def __init__(self, variable_name: _Optional[str] = ..., count: _Optional[str] = ..., mean: _Optional[float] = ..., median: _Optional[float] = ..., mode: _Optional[_Iterable[str]] = ..., variance: _Optional[float] = ..., std_dev: _Optional[float] = ..., variation_coefficient: _Optional[float] = ..., skewness: _Optional[float] = ..., kurtosis: _Optional[float] = ..., min_value: _Optional[float] = ..., max_value: _Optional[float] = ...) -> None: ...
+    q1: float
+    q3: float
+    iqr: float
+    def __init__(self, variable_name: _Optional[str] = ..., count: _Optional[str] = ..., mean: _Optional[float] = ..., median: _Optional[float] = ..., mode: _Optional[_Iterable[str]] = ..., variance: _Optional[float] = ..., std_dev: _Optional[float] = ..., variation_coefficient: _Optional[float] = ..., skewness: _Optional[float] = ..., kurtosis: _Optional[float] = ..., min_value: _Optional[float] = ..., max_value: _Optional[float] = ..., q1: _Optional[float] = ..., q3: _Optional[float] = ..., iqr: _Optional[float] = ...) -> None: ...
 
 class HistogramData(_message.Message):
-    __slots__ = ("column_name", "bins", "frequencies")
+    __slots__ = ("column_name", "bins", "frequencies", "normal_curve_x", "normal_curve_y", "mean", "std_dev")
     COLUMN_NAME_FIELD_NUMBER: _ClassVar[int]
     BINS_FIELD_NUMBER: _ClassVar[int]
     FREQUENCIES_FIELD_NUMBER: _ClassVar[int]
+    NORMAL_CURVE_X_FIELD_NUMBER: _ClassVar[int]
+    NORMAL_CURVE_Y_FIELD_NUMBER: _ClassVar[int]
+    MEAN_FIELD_NUMBER: _ClassVar[int]
+    STD_DEV_FIELD_NUMBER: _ClassVar[int]
     column_name: str
     bins: _containers.RepeatedScalarFieldContainer[float]
     frequencies: _containers.RepeatedScalarFieldContainer[int]
-    def __init__(self, column_name: _Optional[str] = ..., bins: _Optional[_Iterable[float]] = ..., frequencies: _Optional[_Iterable[int]] = ...) -> None: ...
+    normal_curve_x: _containers.RepeatedScalarFieldContainer[float]
+    normal_curve_y: _containers.RepeatedScalarFieldContainer[float]
+    mean: float
+    std_dev: float
+    def __init__(self, column_name: _Optional[str] = ..., bins: _Optional[_Iterable[float]] = ..., frequencies: _Optional[_Iterable[int]] = ..., normal_curve_x: _Optional[_Iterable[float]] = ..., normal_curve_y: _Optional[_Iterable[float]] = ..., mean: _Optional[float] = ..., std_dev: _Optional[float] = ...) -> None: ...
 
 class ConfidenceInterval(_message.Message):
     __slots__ = ("column_name", "confidence_level", "lower_bound", "upper_bound", "mean", "standard_error")

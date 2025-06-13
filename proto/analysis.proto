@@ -53,6 +53,9 @@ message DescriptiveStatistics {
     double kurtosis = 10;
     double min_value = 11;
     double max_value = 12;
+    double q1 = 13;           // Первый квартиль (25%)
+    double q3 = 14;           // Третий квартиль (75%)
+    double iqr = 15;          // Межквартильный размах (IQR)
 }
 
 // Данные гистограммы для построения графика
@@ -60,6 +63,11 @@ message HistogramData {
     string column_name = 1;   // Изменено с variable_name
     repeated double bins = 2;   // Границы бинов (N+1 для N бинов)
     repeated int32 frequencies = 3; // Частоты в каждом бине
+    // Данные для нормальной кривой
+    repeated double normal_curve_x = 4; // X-координаты точек нормальной кривой
+    repeated double normal_curve_y = 5; // Y-координаты точек нормальной кривой
+    double mean = 6;          // Среднее значение для нормальной кривой
+    double std_dev = 7;       // Стандартное отклонение для нормальной кривой
 }
 
 // Доверительные интервалы

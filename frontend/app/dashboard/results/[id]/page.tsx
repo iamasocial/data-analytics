@@ -37,6 +37,9 @@ interface Descriptive {
   kurtosis: number;
   minValue: number; // camelCase как в ответе
   maxValue: number; // camelCase как в ответе
+  q1: number; // Первый квартиль (25%)
+  q3: number; // Третий квартиль (75%)
+  iqr: number; // Межквартильный размах
 }
 
 // Тип для доверительных интервалов
@@ -335,6 +338,20 @@ interface LegacyNormalityTestResultData {
   is_normal: boolean;
   degrees_of_freedom?: number;
   intervals?: number;
+}
+
+// Определяем интерфейс для данных гистограммы с поддержкой обоих форматов имен полей
+interface HistogramChartData {
+  name: string;
+  bins: number[];
+  frequencies: number[];
+  normal_curve_x?: number[];
+  normal_curve_y?: number[];
+  normalCurveX?: number[];
+  normalCurveY?: number[];
+  mean?: number;
+  std_dev?: number;
+  stdDev?: number;
 }
 
 const AnalysisResultPage: React.FC = () => {
@@ -669,12 +686,27 @@ const AnalysisResultPage: React.FC = () => {
   );
 
   // Подготовка данных для DistributionChart
-  const histogramChartDataForDistributionChart: Array<{ name: string; bins: number[]; frequencies: number[] }> | undefined = 
-    results.descriptive_stats?.histograms.map(hist => ({
-      name: hist.columnName,
-      bins: hist.bins,
-      frequencies: hist.frequencies,
-    }));
+  const histogramChartDataForDistributionChart: HistogramChartData[] | undefined = 
+    results.descriptive_stats?.histograms.map(hist => {
+      // Проверяем наличие данных нормальной кривой в разных форматах имен полей
+      const normalCurveX = (hist as any).normal_curve_x || (hist as any).normalCurveX;
+      const normalCurveY = (hist as any).normal_curve_y || (hist as any).normalCurveY;
+      const mean = (hist as any).mean;
+      const stdDev = (hist as any).std_dev || (hist as any).stdDev;
+      
+      return {
+        name: hist.columnName,
+        bins: hist.bins,
+        frequencies: hist.frequencies,
+        normal_curve_x: normalCurveX,
+        normal_curve_y: normalCurveY,
+        normalCurveX: normalCurveX,
+        normalCurveY: normalCurveY,
+        mean: mean,
+        std_dev: stdDev,
+        stdDev: stdDev
+      };
+    });
     
   // Получаем глобальный масштаб для оси Y из утилиты
   const globalYDomain = results?.regression_analysis ? 
@@ -1237,15 +1269,20 @@ const AnalysisResultPage: React.FC = () => {
               [
                 results.descriptive_stats, 
                 hasNormalityTests, 
-                hasWilcoxonTests, 
+                results.wilcoxon_tests && ((results.wilcoxon_tests.signedRankResults && results.wilcoxon_tests.signedRankResults.length > 0) || 
+                                          (results.wilcoxon_tests.signed_rank_results && results.wilcoxon_tests.signed_rank_results.length > 0)), 
                 results.regression_analysis, 
                 results.processing_log && results.processing_log.length > 0
               ].filter(Boolean).length <= 3 ? 'grid-cols-3' : 'grid-cols-5'
             }`}>
               {results.descriptive_stats && <TabsTrigger value="desc_stats">Описательная статистика</TabsTrigger>}
               {hasNormalityTests && <TabsTrigger value="norm_tests">Проверка нормальности</TabsTrigger>}
-              {/* Принудительное отображение вкладки тестов Вилкоксона для отладки */}
-              <TabsTrigger value="wilcoxon">Тесты Вилкоксона</TabsTrigger>
+              {/* Отображаем вкладку тестов Вилкоксона только если есть данные */}
+              {results.wilcoxon_tests && 
+                ((results.wilcoxon_tests.signedRankResults && results.wilcoxon_tests.signedRankResults.length > 0) || 
+                (results.wilcoxon_tests.signed_rank_results && results.wilcoxon_tests.signed_rank_results.length > 0)) && 
+                <TabsTrigger value="wilcoxon">Тесты Вилкоксона</TabsTrigger>
+              }
               {results.regression_analysis && <TabsTrigger value="reg_analysis">Модели регрессии</TabsTrigger>}
               {results.processing_log && results.processing_log.length > 0 && <TabsTrigger value="logs">Лог обработки</TabsTrigger>}
             </TabsList>
@@ -1267,6 +1304,12 @@ const AnalysisResultPage: React.FC = () => {
                             <TableHead>Стд.Откл.</TableHead>
                             <TableHead>Мин.</TableHead>
                             <TableHead>Макс.</TableHead>
+                            <TableHead>Q1 (25%)</TableHead>
+                            <TableHead>Q3 (75%)</TableHead>
+                            <TableHead>IQR</TableHead>
+                            <TableHead>Коэф.вар.</TableHead>
+                            <TableHead>Асимметрия</TableHead>
+                            <TableHead>Эксцесс</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1286,6 +1329,12 @@ const AnalysisResultPage: React.FC = () => {
                               <TableCell>{formatNumber(stat.stdDev)}</TableCell>
                               <TableCell>{formatNumber(stat.minValue)}</TableCell>
                               <TableCell>{formatNumber(stat.maxValue)}</TableCell>
+                              <TableCell>{formatNumber(stat.q1)}</TableCell>
+                              <TableCell>{formatNumber(stat.q3)}</TableCell>
+                              <TableCell>{formatNumber(stat.iqr)}</TableCell>
+                              <TableCell>{formatNumber(stat.variationCoefficient)}</TableCell>
+                              <TableCell>{formatNumber(stat.skewness)}</TableCell>
+                              <TableCell>{formatNumber(stat.kurtosis)}</TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -1304,8 +1353,10 @@ const AnalysisResultPage: React.FC = () => {
                                 variableName={histData.name} 
                                 data={{ 
                                   bins: histData.bins, 
-                                  frequencies: histData.frequencies 
-                                }} 
+                                  frequencies: histData.frequencies
+                                  // Не передаем данные нормальной кривой на вкладке описательной статистики
+                                }}
+                                showNormalCurve={false} // Отключаем отображение нормальной кривой
                               />
                             </div>
                           ))}
@@ -1511,7 +1562,14 @@ const AnalysisResultPage: React.FC = () => {
                                     variableName={histData.name} 
                                     data={{ 
                                       bins: histData.bins, 
-                                      frequencies: histData.frequencies 
+                                      frequencies: histData.frequencies,
+                                      normal_curve_x: histData.normal_curve_x,
+                                      normal_curve_y: histData.normal_curve_y,
+                                      normalCurveX: histData.normalCurveX,
+                                      normalCurveY: histData.normalCurveY,
+                                      mean: histData.mean,
+                                      std_dev: histData.std_dev,
+                                      stdDev: histData.stdDev
                                     }}
                                     showNormalCurve={true}
                                   />
@@ -1542,7 +1600,14 @@ const AnalysisResultPage: React.FC = () => {
                                   variableName={histData.name} 
                                   data={{ 
                                     bins: histData.bins, 
-                                    frequencies: histData.frequencies 
+                                    frequencies: histData.frequencies,
+                                    normal_curve_x: histData.normal_curve_x,
+                                    normal_curve_y: histData.normal_curve_y,
+                                    normalCurveX: histData.normalCurveX,
+                                    normalCurveY: histData.normalCurveY,
+                                    mean: histData.mean,
+                                    std_dev: histData.std_dev,
+                                    stdDev: histData.stdDev
                                   }}
                                   showNormalCurve={true}
                                 />
@@ -1579,16 +1644,19 @@ const AnalysisResultPage: React.FC = () => {
               </TabsContent>
             )}
 
-            {/* Wilcoxon Tests Tab Content - всегда отображаем для отладки */}
-            <TabsContent value="wilcoxon">
-              <Card>
-                <CardHeader><CardTitle>Тесты Вилкоксона</CardTitle></CardHeader>
-                <CardContent className="space-y-6">
-                  {/* Отладочная информация о расчетах тестов Вилкоксона - УДАЛЕНА */}
-                  {renderWilcoxonTabContent()}
-                </CardContent>
-              </Card>
-            </TabsContent>
+            {/* Wilcoxon Tests Tab Content - отображаем только если есть данные */}
+            {results.wilcoxon_tests && 
+              ((results.wilcoxon_tests.signedRankResults && results.wilcoxon_tests.signedRankResults.length > 0) || 
+              (results.wilcoxon_tests.signed_rank_results && results.wilcoxon_tests.signed_rank_results.length > 0)) && (
+              <TabsContent value="wilcoxon">
+                <Card>
+                  <CardHeader><CardTitle>Тесты Вилкоксона</CardTitle></CardHeader>
+                  <CardContent className="space-y-6">
+                    {renderWilcoxonTabContent()}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            )}
 
             {results.processing_log && results.processing_log.length > 0 && (
               <TabsContent value="logs">

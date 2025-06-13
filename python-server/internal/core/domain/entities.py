@@ -25,6 +25,9 @@ class DescriptiveStats:
     kurtosis: float = 0.0
     min_value: float = 0.0
     max_value: float = 0.0
+    q1: float = 0.0  # Первый квартиль (25%)
+    q3: float = 0.0  # Третий квартиль (75%)
+    iqr: float = 0.0  # Межквартильный размах
 
 @dataclass
 class HistogramData:
@@ -32,6 +35,10 @@ class HistogramData:
     variable_name: str
     bins: List[float] = field(default_factory=list)
     frequencies: List[int] = field(default_factory=list)
+    normal_curve_x: List[float] = field(default_factory=list)  # X-координаты точек нормальной кривой
+    normal_curve_y: List[float] = field(default_factory=list)  # Y-координаты точек нормальной кривой
+    mean: float = 0.0                                          # Среднее значение для нормальной кривой
+    std_dev: float = 0.0                                       # Стандартное отклонение для нормальной кривой
 
 @dataclass
 class ConfidenceInterval:

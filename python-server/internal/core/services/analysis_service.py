@@ -102,7 +102,10 @@ class AnalysisService(AnalysisServicePort):
                             skewness=stats_dict.get("skewness", 0.0) if pd.notna(stats_dict.get("skewness")) else 0.0,
                             kurtosis=stats_dict.get("kurtosis", 0.0) if pd.notna(stats_dict.get("kurtosis")) else 0.0,
                             min_value=stats_dict.get("min_value", 0.0) if pd.notna(stats_dict.get("min_value")) else 0.0,
-                            max_value=stats_dict.get("max_value", 0.0) if pd.notna(stats_dict.get("max_value")) else 0.0
+                            max_value=stats_dict.get("max_value", 0.0) if pd.notna(stats_dict.get("max_value")) else 0.0,
+                            q1=stats_dict.get("q1", 0.0) if pd.notna(stats_dict.get("q1")) else 0.0,
+                            q3=stats_dict.get("q3", 0.0) if pd.notna(stats_dict.get("q3")) else 0.0,
+                            iqr=stats_dict.get("iqr", 0.0) if pd.notna(stats_dict.get("iqr")) else 0.0
                         )
                         response.descriptives.append(stats)
                     
@@ -110,7 +113,11 @@ class AnalysisService(AnalysisServicePort):
                         hist = HistogramData(
                             variable_name=hist_dict.get("variable_name", ""),
                             bins=hist_dict.get("bins", []),
-                            frequencies=hist_dict.get("frequencies", [])
+                            frequencies=hist_dict.get("frequencies", []),
+                            normal_curve_x=hist_dict.get("normal_curve_x", []),
+                            normal_curve_y=hist_dict.get("normal_curve_y", []),
+                            mean=hist_dict.get("mean", 0.0),
+                            std_dev=hist_dict.get("std_dev", 0.0)
                         )
                         response.histograms.append(hist)
                 

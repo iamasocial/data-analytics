@@ -155,14 +155,40 @@ class AnalysisServiceGrpcAdapter(analysis_pb2_grpc.AnalysisServiceServicer):
                     stats_msg.kurtosis = stats.kurtosis
                     stats_msg.min_value = stats.min_value
                     stats_msg.max_value = stats.max_value
+                    stats_msg.q1 = stats.q1
+                    stats_msg.q3 = stats.q3
+                    stats_msg.iqr = stats.iqr
                     desc_stats_response.descriptives.append(stats_msg)
                 
+                # Гистограммы
                 for hist in domain_response.histograms:
-                    hist_msg = analysis_pb2.HistogramData()
-                    hist_msg.column_name = hist.variable_name
-                    hist_msg.bins.extend([float(b) for b in hist.bins])
-                    hist_msg.frequencies.extend([int(f) for f in hist.frequencies])
-                    desc_stats_response.histograms.append(hist_msg)
+                    pb_hist = analysis_pb2.HistogramData()
+                    pb_hist.column_name = hist.variable_name
+                    pb_hist.bins.extend(hist.bins)
+                    pb_hist.frequencies.extend(hist.frequencies)
+                    
+                    # Добавляем данные для нормальной кривой, если они есть
+                    has_normal_curve = False
+                    if hasattr(hist, 'normal_curve_x') and hist.normal_curve_x:
+                        pb_hist.normal_curve_x.extend(hist.normal_curve_x)
+                        has_normal_curve = True
+                        print(f"Adding normal_curve_x for {hist.variable_name}: {len(hist.normal_curve_x)} points")
+                    if hasattr(hist, 'normal_curve_y') and hist.normal_curve_y:
+                        pb_hist.normal_curve_y.extend(hist.normal_curve_y)
+                        print(f"Adding normal_curve_y for {hist.variable_name}: {len(hist.normal_curve_y)} points")
+                    if hasattr(hist, 'mean'):
+                        pb_hist.mean = hist.mean
+                        print(f"Adding mean for {hist.variable_name}: {hist.mean}")
+                    if hasattr(hist, 'std_dev'):
+                        pb_hist.std_dev = hist.std_dev
+                        print(f"Adding std_dev for {hist.variable_name}: {hist.std_dev}")
+                    
+                    if has_normal_curve:
+                        print(f"Normal curve data added for {hist.variable_name}")
+                    else:
+                        print(f"No normal curve data for {hist.variable_name}")
+                    
+                    desc_stats_response.histograms.append(pb_hist)
                 
                 for ci in domain_response.confidence_intervals:
                     ci_msg = analysis_pb2.ConfidenceInterval()
@@ -397,6 +423,9 @@ class AnalysisServiceGrpcAdapter(analysis_pb2_grpc.AnalysisServiceServicer):
             pb_stat.kurtosis = stat.kurtosis
             pb_stat.min_value = stat.min_value
             pb_stat.max_value = stat.max_value
+            pb_stat.q1 = stat.q1
+            pb_stat.q3 = stat.q3
+            pb_stat.iqr = stat.iqr
             desc_stats_response.descriptives.append(pb_stat)
         
         # Гистограммы
@@ -405,6 +434,28 @@ class AnalysisServiceGrpcAdapter(analysis_pb2_grpc.AnalysisServiceServicer):
             pb_hist.column_name = hist.variable_name
             pb_hist.bins.extend(hist.bins)
             pb_hist.frequencies.extend(hist.frequencies)
+            
+            # Добавляем данные для нормальной кривой, если они есть
+            has_normal_curve = False
+            if hasattr(hist, 'normal_curve_x') and hist.normal_curve_x:
+                pb_hist.normal_curve_x.extend(hist.normal_curve_x)
+                has_normal_curve = True
+                print(f"Adding normal_curve_x for {hist.variable_name}: {len(hist.normal_curve_x)} points")
+            if hasattr(hist, 'normal_curve_y') and hist.normal_curve_y:
+                pb_hist.normal_curve_y.extend(hist.normal_curve_y)
+                print(f"Adding normal_curve_y for {hist.variable_name}: {len(hist.normal_curve_y)} points")
+            if hasattr(hist, 'mean'):
+                pb_hist.mean = hist.mean
+                print(f"Adding mean for {hist.variable_name}: {hist.mean}")
+            if hasattr(hist, 'std_dev'):
+                pb_hist.std_dev = hist.std_dev
+                print(f"Adding std_dev for {hist.variable_name}: {hist.std_dev}")
+                
+            if has_normal_curve:
+                print(f"Normal curve data added for {hist.variable_name}")
+            else:
+                print(f"No normal curve data for {hist.variable_name}")
+                
             desc_stats_response.histograms.append(pb_hist)
         
         # Доверительные интервалы

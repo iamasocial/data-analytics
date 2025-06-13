@@ -6,16 +6,23 @@ import * as d3 from "d3"
 interface HistogramData {
   bins: number[]; // Bin edges (N+1)
   frequencies: number[]; // Frequencies per bin (N)
+  normal_curve_x?: number[]; // X-координаты точек нормальной кривой (опционально)
+  normal_curve_y?: number[]; // Y-координаты точек нормальной кривой (опционально)
+  normalCurveX?: number[]; // Альтернативное имя для X-координат (camelCase формат)
+  normalCurveY?: number[]; // Альтернативное имя для Y-координат (camelCase формат)
+  mean?: number; // Среднее значение для нормальной кривой
+  std_dev?: number; // Стандартное отклонение для нормальной кривой
+  stdDev?: number; // Альтернативное имя для стандартного отклонения (camelCase формат)
 }
 
 interface DistributionChartProps {
   data: HistogramData;
   variableName: string;
-  showNormalCurve?: boolean; // Опция для отображения нормальной кривой
+  showNormalCurve?: boolean; // Этот параметр оставляем для обратной совместимости, но игнорируем
 }
 
 // Updated component to accept props and draw a single histogram
-export function DistributionChart({ data, variableName, showNormalCurve = false }: DistributionChartProps) {
+export function DistributionChart({ data, variableName }: DistributionChartProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [isMounted, setIsMounted] = useState(false); // State for client-side check
 
@@ -25,6 +32,26 @@ export function DistributionChart({ data, variableName, showNormalCurve = false 
   }, []);
 
   useEffect(() => {
+    // Проверяем наличие данных нормальной кривой в props
+    console.log(`[DistributionChart] Props check for ${variableName}:`, {
+      data_keys: Object.keys(data || {}),
+      has_normal_curve_x: !!data?.normal_curve_x,
+      normal_curve_x_length: data?.normal_curve_x?.length || 0,
+      has_normal_curve_y: !!data?.normal_curve_y,
+      normal_curve_y_length: data?.normal_curve_y?.length || 0
+    });
+    
+    // Проверяем альтернативные имена полей через any
+    const anyData = data as any;
+    if (anyData) {
+      console.log(`[DistributionChart] Alternative field names check for ${variableName}:`, {
+        has_normalCurveX: !!anyData.normalCurveX,
+        normalCurveX_length: anyData.normalCurveX?.length || 0,
+        has_normalCurveY: !!anyData.normalCurveY,
+        normalCurveY_length: anyData.normalCurveY?.length || 0
+      });
+    }
+    
     // Wait until mounted and basic data/ref checks pass
     if (!isMounted) {
       return;
@@ -36,6 +63,24 @@ export function DistributionChart({ data, variableName, showNormalCurve = false 
     
     if (!data) {
       return;
+    }
+    
+    // Отладочный вывод для проверки данных
+    console.log(`[DistributionChart] Rendering chart for ${variableName}`);
+    console.log(`[DistributionChart] Bins: ${data.bins?.length || 0}, Frequencies: ${data.frequencies?.length || 0}`);
+    console.log(`[DistributionChart] Normal curve data:`, {
+      hasNormalCurveX: !!data.normal_curve_x && data.normal_curve_x.length > 0,
+      normalCurveXLength: data.normal_curve_x?.length || 0,
+      hasNormalCurveY: !!data.normal_curve_y && data.normal_curve_y.length > 0,
+      normalCurveYLength: data.normal_curve_y?.length || 0
+    });
+    
+    // Дополнительная проверка для отладки
+    console.log("[DistributionChart] Full data object keys:", Object.keys(data));
+    if (data.normal_curve_x) {
+      console.log("[DistributionChart] normal_curve_x is present");
+    } else {
+      console.log("[DistributionChart] normal_curve_x is missing");
     }
     
     if (!data.bins || data.bins.length < 2) {
@@ -81,7 +126,7 @@ export function DistributionChart({ data, variableName, showNormalCurve = false 
     // --- D3 Setup ---
     d3.select(svgRef.current).selectAll("*").remove(); // Clear previous chart
 
-    // Увеличим отступы для лучшего отображения нормальной кривой
+    // Отступы для графика
     const margin = { top: 30, right: 40, bottom: 50, left: 60 };
     const containerWidth = svgRef.current.clientWidth;
     const containerHeight = svgRef.current.clientHeight > 0 ? svgRef.current.clientHeight : 300;
@@ -116,47 +161,21 @@ export function DistributionChart({ data, variableName, showNormalCurve = false 
     let xMin = histBins[0];
     let xMax = histBins[histBins.length - 1];
     
-    // Вычисляем параметры нормального распределения, если нужна нормальная кривая
-    let mean = 0;
-    let stdDev = 1;
-    
-    if (showNormalCurve) {
-      // Вычисляем среднее через взвешенную сумму середин интервалов
-      const binMidpoints = barData.map(d => (d.x0 + d.x1) / 2);
-      let totalCount = 0;
-      let weightedSum = 0;
-      
-      binMidpoints.forEach((midpoint, i) => {
-        weightedSum += midpoint * histFrequencies[i];
-        totalCount += histFrequencies[i];
-      });
-      
-      // Среднее
-      mean = totalCount > 0 ? weightedSum / totalCount : 0;
-      
-      // Теперь вычисляем дисперсию
-      let weightedSumSquaredDeviations = 0;
-      binMidpoints.forEach((midpoint, i) => {
-        weightedSumSquaredDeviations += histFrequencies[i] * Math.pow(midpoint - mean, 2);
-      });
-      
-      // Стандартное отклонение
-      stdDev = totalCount > 1 ? Math.sqrt(weightedSumSquaredDeviations / (totalCount - 1)) : 1;
-      
-      // Умеренно расширяем границы для лучшего отображения нормальной кривой
-      // Используем 2.5 стандартных отклонения в обе стороны от среднего
-      const dataRange = xMax - xMin;
-      const minExtension = Math.max(mean - 2.5 * stdDev, xMin - dataRange * 0.1);
-      const maxExtension = Math.min(mean + 2.5 * stdDev, xMax + dataRange * 0.1);
-      
-      // Обновляем границы
-      xMin = Math.min(xMin, minExtension);
-      xMax = Math.max(xMax, maxExtension);
+    // Если есть данные нормальной кривой, учитываем их при определении границ
+    if (data.normal_curve_x && data.normal_curve_x.length > 0) {
+      xMin = Math.min(xMin, Math.min(...data.normal_curve_x));
+      xMax = Math.max(xMax, Math.max(...data.normal_curve_x));
     }
     
     // Максимум частоты для масштаба Y
     const histogramMax = d3.max(histFrequencies) || 1;
-    const yMax = histogramMax * 1.1; // Небольшой отступ сверху
+    let yMax = histogramMax * 1.1; // Небольшой отступ сверху
+    
+    // Если есть данные нормальной кривой, учитываем их при определении максимума Y
+    if (data.normal_curve_y && data.normal_curve_y.length > 0) {
+      const normalCurveMax = d3.max(data.normal_curve_y) || 0;
+      yMax = Math.max(yMax, normalCurveMax * 1.1);
+    }
 
     const xScale = d3.scaleLinear().domain([xMin, xMax]).range([0, width]);
     const yScale = d3.scaleLinear().domain([0, yMax]).nice().range([height, 0]);
@@ -203,104 +222,95 @@ export function DistributionChart({ data, variableName, showNormalCurve = false 
        .style("opacity", 0.8)
        .style("stroke", "#2d3748")
        .style("stroke-width", 1);
-
-    // --- Draw Normal Curve if requested ---
-    if (showNormalCurve) {
+    
+    // --- Draw Normal Curve if data is available ---
+    const normalCurveX = data.normal_curve_x || data.normalCurveX;
+    const normalCurveY = data.normal_curve_y || data.normalCurveY;
+    
+    if (normalCurveX && normalCurveY && 
+        normalCurveX.length > 0 && normalCurveY.length > 0) {
+      
+      console.log(`[DistributionChart] Drawing normal curve for ${variableName} with ${normalCurveX.length} points`);
+      console.log(`[DistributionChart] X range: [${Math.min(...normalCurveX)}, ${Math.max(...normalCurveX)}]`);
+      console.log(`[DistributionChart] Y range: [${Math.min(...normalCurveY)}, ${Math.max(...normalCurveY)}]`);
+      
+      // Вывод первых 5 точек для отладки
+      console.log("[DistributionChart] First 5 points:", normalCurveX.slice(0, 5).map((x: number, i: number) => ({
+        x: x,
+        y: normalCurveY?.[i] || 0
+      })));
+      
+      // Создаем массив точек для кривой
+      const curvePoints = normalCurveX.map((x: number, i: number) => ({
+        x: x,
+        y: normalCurveY?.[i] || 0
+      }));
+      
+      // Рисуем кривую
+      const line = d3.line<{x: number, y: number}>()
+        .x(d => xScale(d.x))
+        .y(d => yScale(d.y))
+        .curve(d3.curveBasis); // Сглаживаем кривую
+      
       try {
-        // Функция плотности нормального распределения
-        const normalDensity = (x: number) => {
-          return (1 / (stdDev * Math.sqrt(2 * Math.PI))) * 
-                 Math.exp(-0.5 * Math.pow((x - mean) / stdDev, 2));
-        };
-
-        // Определяем ширину бина
-        const avgBinWidth = barData.reduce((sum, d) => sum + (d.x1 - d.x0), 0) / barData.length;
-        
-        // Масштабируем кривую нормального распределения
-        const totalFrequency = d3.sum(histFrequencies);
-        
-        // Масштабный коэффициент для приоритета гистограммы
-        const maxNormalHeight = normalDensity(mean);
-        const targetHeight = histogramMax * 0.95; // Ниже максимума гистограммы
-        const scaleFactor = targetHeight / maxNormalHeight;
-        
-        // Создаем точки для кривой нормального распределения
-        const numPoints = 200; // Много точек для плавной кривой
-        const step = (xMax - xMin) / numPoints;
-        
-        const normalCurvePoints = Array.from({ length: numPoints + 1 }, (_, i) => {
-          const x = xMin + i * step;
-          const y = normalDensity(x) * scaleFactor;
-          return { x, y };
-        });
-        
-        // Рисуем кривую
-        const line = d3.line<{x: number, y: number}>()
-          .x(d => xScale(d.x))
-          .y(d => yScale(d.y))
-          .curve(d3.curveBasis); // Сглаживаем кривую
-        
-        svg.append("path")
-          .datum(normalCurvePoints)
+        const path = svg.append("path")
+          .datum(curvePoints)
           .attr("fill", "none")
           .attr("stroke", "#e53e3e")
           .attr("stroke-width", 2)
           .attr("d", line);
           
-        // Добавляем легенду
-        const legendX = width - 120;
-        const legendY = 20;
-        
-        // Прямоугольник для гистограммы
-        svg.append("rect")
-          .attr("x", legendX - 25)
-          .attr("y", legendY)
-          .attr("width", 20)
-          .attr("height", 10)
-          .style("fill", "#4c51bf")
-          .style("opacity", 0.8)
-          .style("stroke", "#2d3748")
-          .style("stroke-width", 1);
-        
-        // Надпись для гистограммы
-        svg.append("text")
-          .attr("x", legendX)
-          .attr("y", legendY + 8)
-          .text("Наблюдаемое")
-          .style("font-size", "12px")
-          .attr("alignment-baseline", "middle");
-        
-        // Линия для нормальной кривой
-        svg.append("line")
-          .attr("x1", legendX - 25)
-          .attr("y1", legendY + 25)
-          .attr("x2", legendX - 5)
-          .attr("y2", legendY + 25)
-          .style("stroke", "#e53e3e")
-          .style("stroke-width", 2);
-        
-        // Надпись для нормальной кривой
-        svg.append("text")
-          .attr("x", legendX)
-          .attr("y", legendY + 25)
-          .text("Нормальное")
-          .style("font-size", "12px")
-          .attr("alignment-baseline", "middle");
+        console.log(`[DistributionChart] Normal curve path created: ${path.attr("d")}`);
       } catch (error) {
-        console.error("[DistributionChart] Error drawing normal curve:", error);
+        console.error(`[DistributionChart] Error drawing normal curve:`, error);
       }
+        
+      // Добавляем легенду
+      const legendX = width - 120;
+      const legendY = 20;
+      
+      // Прямоугольник для гистограммы
+      svg.append("rect")
+        .attr("x", legendX - 25)
+        .attr("y", legendY)
+        .attr("width", 20)
+        .attr("height", 10)
+        .style("fill", "#4c51bf")
+        .style("opacity", 0.8)
+        .style("stroke", "#2d3748")
+        .style("stroke-width", 1);
+      
+      // Надпись для гистограммы
+      svg.append("text")
+        .attr("x", legendX)
+        .attr("y", legendY + 8)
+        .text("Наблюдаемое")
+        .style("font-size", "12px")
+        .attr("alignment-baseline", "middle");
+      
+      // Линия для нормальной кривой
+      svg.append("line")
+        .attr("x1", legendX - 25)
+        .attr("y1", legendY + 25)
+        .attr("x2", legendX - 5)
+        .attr("y2", legendY + 25)
+        .style("stroke", "#e53e3e")
+        .style("stroke-width", 2);
+      
+      // Надпись для нормальной кривой
+      svg.append("text")
+        .attr("x", legendX)
+        .attr("y", legendY + 25)
+        .text("Нормальное")
+        .style("font-size", "12px")
+        .attr("alignment-baseline", "middle");
     }
 
-  }, [data, variableName, isMounted, showNormalCurve]); // Добавляем showNormalCurve в зависимости
-
-  // Conditionally render svg only when mounted
-  if (!isMounted) {
-    return <div className="w-full h-64 flex items-center justify-center text-gray-500">Загрузка графика...</div>; // Placeholder during mount
-  }
+  }, [data, variableName, isMounted]);
 
   return (
-    <div className="w-full h-64"> {/* Set a fixed height or make it responsive */}
-      <svg ref={svgRef} className="w-full h-full" />
+    <div className="w-full h-64">
+      <svg ref={svgRef} className="w-full h-full"></svg>
     </div>
   );
 }

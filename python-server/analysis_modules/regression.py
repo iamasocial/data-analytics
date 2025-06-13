@@ -237,11 +237,37 @@ def perform_simple_linear_regression(df: pd.DataFrame, dependent_var: str = None
                         y_range_s = y_max_s - y_min_s; x_range_s = x_max_s - x_min_s
                         if x_range_s > 1e-6 and y_range_s > 1e-6:
                             try: 
-                                slope_sign = np.sign(np.polyfit(x_data, y_data, 1)[0])
-                                k0_val = slope_sign * 4 / (x_range_s * 0.5) 
-                                k0_val = np.clip(k0_val, -100/ (x_range_s if x_range_s >0.1 else 0.1), 100 / (x_range_s if x_range_s > 0.1 else 0.1) )
+                                # Улучшенная оценка начального наклона
+                                # Находим точки в середине диапазона Y для лучшей оценки наклона в точке перегиба
+                                mid_y = y_min_s + y_range_s * 0.5
+                                mid_indices = np.argsort(np.abs(y_data - mid_y))[:max(3, n_valid // 5)]  # Берем до 20% точек ближайших к середине
+                                if len(mid_indices) >= 3:  # Если достаточно точек для оценки
+                                    mid_x = x_data[mid_indices]
+                                    mid_y_actual = y_data[mid_indices]
+                                    # Линейная регрессия на этом участке даст хорошую оценку наклона в точке перегиба
+                                    slope_mid = np.polyfit(mid_x, mid_y_actual, 1)[0]
+                                    # Для сигмоиды максимальный наклон = k*L/4, отсюда k = 4*slope/L
+                                    k0_val = 4 * slope_mid / l_param0 if abs(l_param0) > 1e-6 else slope_mid
+                                else:
+                                    slope_sign = np.sign(np.polyfit(x_data, y_data, 1)[0])
+                                    k0_val = slope_sign * 4 / (x_range_s * 0.5)
+                                
+                                # Ограничиваем k в разумных пределах
+                                k0_val = np.clip(k0_val, -100/ (x_range_s if x_range_s >0.1 else 0.1), 100 / (x_range_s if x_range_s > 0.1 else 0.1))
                                 if abs(k0_val) < 1e-3: k0_val = slope_sign * 1e-3 if k0_val !=0 else 1e-3
-                            except: pass
+                            except Exception as e:
+                                logs.append(log_prefix + f"Warning during sigmoid k0 estimation: {e}. Using default value.")
+                                k0_val = 1.0
+                        
+                        # Оценка x0 - точки перегиба
+                        try:
+                            # Находим точку, где y примерно равно половине максимума
+                            half_height = y_min_s + y_range_s * 0.5
+                            closest_idx = np.argmin(np.abs(y_data - half_height))
+                            x0_0 = x_data[closest_idx]  # Это лучшая оценка точки перегиба x0
+                        except:
+                            x0_0 = np.median(x_data)  # Запасной вариант
+                        
                         p0 = [k0_val, x0_0, l_param0] 
                         l_low_bound = y_min_s - 0.2 * abs(y_range_s); l_high_bound = y_max_s + 0.2 * abs(y_range_s)
                         if abs(y_range_s) < 1e-3: 
@@ -252,7 +278,8 @@ def perform_simple_linear_regression(df: pd.DataFrame, dependent_var: str = None
                         k_abs_max = 1000 / (x_range_s_eff if x_range_s_eff > 0.01 else 0.01)
                         bounds = ([-k_abs_max, x_min_s - 0.1*x_range_s_eff, l_low_bound], 
                                   [k_abs_max,  x_max_s + 0.1*x_range_s_eff,  l_high_bound])
-                        method_for_curve_fit = 'trf'; current_maxfev = max(current_maxfev, 30000 * current_n_params)
+                        method_for_curve_fit = 'trf'
+                        current_maxfev = max(current_maxfev, 50000 * current_n_params)  # Увеличиваем количество итераций
                 
                 if reg_type == "Linear (curve_fit)":
                     slope_init = (np.mean(y_data*x_data) - np.mean(y_data)*np.mean(x_data)) / (np.mean(x_data**2) - np.mean(x_data)**2) if np.var(x_data)>1e-9 else 1.0
@@ -277,7 +304,36 @@ def perform_simple_linear_regression(df: pd.DataFrame, dependent_var: str = None
                             diag_pcov_elements = np.where(valid_indices, diag_pcov_raw, np.nan)
                             diag_pcov_elements[diag_pcov_elements < 0] = 0 
                             valid_covariance = not np.all(np.isnan(diag_pcov_elements)) 
-                    except Exception: pass 
+                    except Exception as e_cov: 
+                        logs.append(log_prefix + f"Warning: Could not extract covariance diagonal: {e_cov}")
+                else:
+                    # Если ковариация не может быть оценена, логируем это
+                    if pcov is None:
+                        logs.append(log_prefix + f"Warning: Covariance matrix is None for {reg_type} model.")
+                    elif np.any(np.isinf(pcov)):
+                        logs.append(log_prefix + f"Warning: Infinite values in covariance matrix for {reg_type} model.")
+                    elif np.any(np.isnan(pcov)):
+                        logs.append(log_prefix + f"Warning: NaN values in covariance matrix for {reg_type} model.")
+                    
+                    # Для сигмоидной модели это частая проблема, попробуем улучшить оценку
+                    if reg_type == "Sigmoid" and not valid_covariance:
+                        logs.append(log_prefix + f"Attempting to improve Sigmoid model fit with different initial values.")
+                        # Пробуем альтернативные начальные значения
+                        try:
+                            # Пробуем несколько разных начальных значений для k
+                            for k_factor in [0.5, 2.0, 0.1, 10.0]:
+                                alt_p0 = [p0[0] * k_factor, p0[1], p0[2]]
+                                try:
+                                    alt_params, alt_pcov = curve_fit(func, x_data, y_data, p0=alt_p0, bounds=bounds, 
+                                                                    method=method_for_curve_fit, maxfev=current_maxfev)
+                                    if alt_pcov is not None and not np.any(np.isinf(alt_pcov)) and not np.any(np.isnan(alt_pcov)):
+                                        params, pcov = alt_params, alt_pcov
+                                        logs.append(log_prefix + f"Found better initial values with k_factor={k_factor}")
+                                        break
+                                except:
+                                    continue
+                        except Exception as alt_e:
+                            logs.append(log_prefix + f"Alternative fitting attempt failed: {alt_e}")
 
                 y_pred_cf = func(x_data, *params)
                 r_squared_val = calculate_r_squared(y_data, y_pred_cf)
@@ -395,7 +451,7 @@ def perform_simple_linear_regression(df: pd.DataFrame, dependent_var: str = None
             except RuntimeError as rte_cf: 
                 logs.append(log_prefix + f"Skipped {reg_type} (RuntimeError: {rte_cf}).")
             except ValueError as ve_cf:
-                 logs.append(log_prefix + f"Skipped {reg_type} (ValueError: {ve_cf}).")
+                logs.append(log_prefix + f"Skipped {reg_type} (ValueError: {ve_cf}).")
             except Exception as e_cf_model: 
                 logs.append(log_prefix + f"Skipped {reg_type} (Unexpected error: {e_cf_model}). Details: {str(e_cf_model)}")
 

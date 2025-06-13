@@ -630,6 +630,41 @@ export default function UploadPage() {
       // Добавляем дополнительную обработку для совместимости с разными форматами имен полей
       console.log("Original API results:", results);
       
+      // Детальная проверка данных гистограммы
+      if (results.descriptive_stats?.histograms && results.descriptive_stats.histograms.length > 0) {
+        const firstHist = results.descriptive_stats.histograms[0];
+        console.log("First histogram fields:", Object.keys(firstHist));
+        console.log("First histogram data:", {
+          column_name: firstHist.column_name,
+          bins_length: firstHist.bins?.length,
+          frequencies_length: firstHist.frequencies?.length,
+          normalCurveX_length: firstHist.normalCurveX?.length,
+          normalCurveY_length: firstHist.normalCurveY?.length,
+          mean: firstHist.mean,
+          stdDev: firstHist.stdDev
+        });
+        
+        // Проверяем все поля гистограммы
+        console.log("Full first histogram:", JSON.stringify(firstHist));
+        
+        // Преобразуем snake_case в camelCase для полей нормальной кривой
+        results.descriptive_stats.histograms.forEach((hist: Record<string, any>) => {
+          // Проверяем наличие snake_case полей и преобразуем их в camelCase
+          if (hist.normal_curve_x && !hist.normalCurveX) {
+            hist.normalCurveX = hist.normal_curve_x;
+            console.log(`Converted normal_curve_x to normalCurveX for ${hist.column_name}`);
+          }
+          if (hist.normal_curve_y && !hist.normalCurveY) {
+            hist.normalCurveY = hist.normal_curve_y;
+            console.log(`Converted normal_curve_y to normalCurveY for ${hist.column_name}`);
+          }
+          if (hist.std_dev && !hist.stdDev) {
+            hist.stdDev = hist.std_dev;
+            console.log(`Converted std_dev to stdDev for ${hist.column_name}`);
+          }
+        });
+      }
+      
       // Проверяем и преобразуем поля тестов Вилкоксона, если нужно
       if (results.wilcoxon_tests) {
         // Копируем snake_case поля в camelCase для совместимости
@@ -1070,13 +1105,13 @@ export default function UploadPage() {
                 {analysisResult?.descriptive_stats && (
                     <TabsTrigger value="descriptive-stats">{t("results.tabs.descriptiveStats")}</TabsTrigger>
                 )}
-                {analysisResult?.normality_tests && (
+                {analysisResult?.normality_tests && selectedAnalysesOptions.normality_test && (
                     <TabsTrigger value="normality-test">{t("results.tabs.normalityTest")}</TabsTrigger>
                 )}
                 {analysisResult?.regression_analysis && (
                     <TabsTrigger value="regression">{t("results.tabs.regression")}</TabsTrigger>
                 )}
-                {/* Тесты Вилкоксона - показываем всегда, если были выбраны */}
+                {/* Тесты Вилкоксона - показываем только если были выбраны */}
                 {selectedAnalysesOptions.wilcoxon_signed_rank || selectedAnalysesOptions.mann_whitney ? (
                     <TabsTrigger value="wilcoxon">{t("wilcoxon_tests")}</TabsTrigger>
                 ) : null}
@@ -1100,6 +1135,12 @@ export default function UploadPage() {
                           <TableHead>Стд.Откл.</TableHead>
                           <TableHead>Мин.</TableHead>
                           <TableHead>Макс.</TableHead>
+                          <TableHead>Q1 (25%)</TableHead>
+                          <TableHead>Q3 (75%)</TableHead>
+                          <TableHead>IQR</TableHead>
+                          <TableHead>Коэф.вар.</TableHead>
+                          <TableHead>Асимметрия</TableHead>
+                          <TableHead>Эксцесс</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1119,10 +1160,16 @@ export default function UploadPage() {
                             <TableCell>{formatNumber(stat.std_dev)}</TableCell>
                             <TableCell>{formatNumber(stat.min_value)}</TableCell>
                             <TableCell>{formatNumber(stat.max_value)}</TableCell>
+                            <TableCell>{formatNumber(stat.q1)}</TableCell>
+                            <TableCell>{formatNumber(stat.q3)}</TableCell>
+                            <TableCell>{formatNumber(stat.iqr)}</TableCell>
+                            <TableCell>{formatNumber(stat.variation_coefficient)}</TableCell>
+                            <TableCell>{formatNumber(stat.skewness)}</TableCell>
+                            <TableCell>{formatNumber(stat.kurtosis)}</TableCell>
                           </TableRow>
                         )) ?? (
                           <TableRow>
-                            <TableCell colSpan={8} className="text-center">Нет данных</TableCell>
+                            <TableCell colSpan={14} className="text-center">Нет данных</TableCell>
                           </TableRow>
                         )}
                       </TableBody>
@@ -1133,14 +1180,41 @@ export default function UploadPage() {
                       <h3 className="text-lg font-semibold mb-4">Гистограммы Распределения</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {analysisResult.descriptive_stats.histograms?.map((hist: any, index: number) => {
+                           // Отладочный вывод для проверки наличия данных нормальной кривой
+                           console.log(`[page.tsx] Histogram data for ${hist.column_name}:`, {
+                             bins: hist.bins?.length,
+                             frequencies: hist.frequencies?.length,
+                             normal_curve_x: hist.normalCurveX?.length, // Используем camelCase формат
+                             normal_curve_y: hist.normalCurveY?.length, // Используем camelCase формат
+                             mean: hist.mean,
+                             std_dev: hist.stdDev // Используем camelCase формат
+                           });
+                           
+                           // Дополнительный отладочный вывод перед передачей в DistributionChart
+                           if (hist.bins && hist.frequencies && hist.bins.length > 0 && hist.frequencies.length > 0) {
+                             console.log(`[page.tsx] Passing data to DistributionChart for ${hist.column_name}:`, {
+                               bins_length: hist.bins.length,
+                               frequencies_length: hist.frequencies.length,
+                               normalCurveX: hist.normalCurveX ? `present (${hist.normalCurveX.length} points)` : 'missing',
+                               normalCurveY: hist.normalCurveY ? `present (${hist.normalCurveY.length} points)` : 'missing',
+                               mean: hist.mean,
+                               stdDev: hist.stdDev
+                             });
+                           }
+                           
                            return (
                              <div key={`hist-${index}-${hist.column_name}`} className="border rounded-lg p-4">
                                <h4 className="text-md font-semibold mb-2 text-center">{hist.column_name}</h4>
                                {/* Ensure data structure is correct before passing */}
                                {hist.bins && hist.frequencies && hist.bins.length > 0 && hist.frequencies.length > 0 ? (
                                  <DistributionChart 
-                                   data={{ bins: hist.bins, frequencies: hist.frequencies }} 
+                                   data={{ 
+                                     bins: hist.bins, 
+                                     frequencies: hist.frequencies
+                                     // Не передаем данные нормальной кривой на вкладке описательной статистики
+                                   }} 
                                    variableName={hist.column_name}
+                                   showNormalCurve={false} // Отключаем отображение нормальной кривой
                                  />
                                ) : (
                                  <p className="text-sm text-center text-gray-500">Нет данных для гистограммы '{hist.column_name}'</p>
@@ -1177,7 +1251,7 @@ export default function UploadPage() {
               </TabsContent>
               )}
 
-              {analysisResult?.normality_tests && (
+              {analysisResult?.normality_tests && selectedAnalysesOptions.normality_test && (
                 <TabsContent value="normality-test">
                 <Card>
                   <CardHeader>
@@ -1268,9 +1342,16 @@ export default function UploadPage() {
                               <h4 className="text-md font-semibold mb-2 text-center">{hist.column_name}</h4>
                               {hist.bins && hist.frequencies && hist.bins.length > 0 && hist.frequencies.length > 0 ? (
                                 <DistributionChart 
-                                  data={{ bins: hist.bins, frequencies: hist.frequencies }} 
+                                  data={{ 
+                                    bins: hist.bins, 
+                                    frequencies: hist.frequencies,
+                                    normal_curve_x: hist.normalCurveX || hist.normal_curve_x, // Поддержка обоих форматов
+                                    normal_curve_y: hist.normalCurveY || hist.normal_curve_y, // Поддержка обоих форматов
+                                    mean: hist.mean,
+                                    std_dev: hist.stdDev || hist.std_dev // Поддержка обоих форматов
+                                  }} 
                                   variableName={hist.column_name}
-                                  showNormalCurve={true}
+                                  showNormalCurve={true} // Включаем отображение нормальной кривой на вкладке с тестами нормальности
                                 />
                               ) : (
                                 <p className="text-sm text-center text-gray-500">Нет данных для гистограммы '{hist.column_name}'</p>
