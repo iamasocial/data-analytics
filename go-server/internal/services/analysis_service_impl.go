@@ -131,6 +131,17 @@ func (s *analysisService) PerformAnalysis(ctx context.Context, fileName string, 
 		}
 	}
 
+	// Тесты Вилкоксона
+	if pyResponse.WilcoxonTests != nil {
+		// Сохраняем все результаты тестов Вилкоксона
+		jsonData, err := marshaller.Marshal(pyResponse.WilcoxonTests)
+		if err != nil {
+			log.Printf("Error marshalling WilcoxonTests to JSON for run %d: %v", runID, err)
+		} else {
+			resultsToSave["wilcoxon_tests"] = jsonData
+		}
+	}
+
 	if len(resultsToSave) > 0 {
 		err = s.analysisRepo.SaveAnalysisResults(ctx, runID, resultsToSave)
 		if err != nil {

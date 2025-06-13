@@ -9,6 +9,7 @@ import analysis_pb2_grpc
 
 from internal.core.domain.entities import DataFileRequest
 from internal.core.ports.analysis_ports import AnalysisServicePort
+from internal.core.services.analysis_service import WILCOXON_SIGNED_RANK_ANALYSIS, MANN_WHITNEY_ANALYSIS
 
 
 class AnalysisServiceGrpcAdapter(analysis_pb2_grpc.AnalysisServiceServicer):
@@ -116,8 +117,26 @@ class AnalysisServiceGrpcAdapter(analysis_pb2_grpc.AnalysisServiceServicer):
             # Вызываем сервис для анализа данных
             domain_response = self.analysis_service.analyze_data(domain_request)
             
-            # Заполняем логи обработки
-            grpc_response.processing_log.extend(domain_response.processing_log)
+            # Преобразуем доменный ответ в gRPC-ответ
+            selected_analyses = list(request.selected_analyses)
+            grpc_response = self._convert_analysis_response(domain_response, selected_analyses)
+            return grpc_response
+        
+        except Exception as e:
+            import traceback
+            error_message = f"Error analyzing data: {e}"
+            full_traceback = traceback.format_exc()
+            print(f"{error_message}\n{full_traceback}")
+            
+            grpc_response.processing_log.append(error_message)
+            
+            error_details_msg = analysis_pb2.ErrorDetails()
+            error_details_msg.code = "ANALYSIS_ERROR"
+            error_details_msg.message = str(e)
+            error_details_msg.details.append(full_traceback)
+            grpc_response.error.CopyFrom(error_details_msg)
+            
+            return grpc_response
             
             # --- Populate Descriptive Statistics ---
             if domain_response.descriptives or domain_response.histograms or domain_response.confidence_intervals:
@@ -201,8 +220,8 @@ class AnalysisServiceGrpcAdapter(analysis_pb2_grpc.AnalysisServiceServicer):
                 # Add data points (only need to do this once since all models use the same data)
                 for point in first_model.data_points:
                     data_point = analysis_pb2.DataPoint()
-                    data_point.x = point.get("x", 0.0)
-                    data_point.y = point.get("y", 0.0)
+                    data_point.x = point["x"] if isinstance(point, dict) else point.x
+                    data_point.y = point["y"] if isinstance(point, dict) else point.y
                     reg_analysis_response.data_points.append(data_point)
                 
                 # Add all regression models
@@ -337,6 +356,218 @@ class AnalysisServiceGrpcAdapter(analysis_pb2_grpc.AnalysisServiceServicer):
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(error_message)
             return grpc_response
+
+    def _convert_analysis_response(self, python_response, selected_analyses=None):
+        """
+        Конвертирует объект Python AnalysisResponse 
+        в объект gRPC AnalyzeDataResponse.
+        
+        Args:
+            python_response: Ответ сервиса анализа в виде доменного объекта
+            selected_analyses: Список выбранных для анализа методов
+        """
+        grpc_response = analysis_pb2.AnalyzeDataResponse()
+        
+        # Обработка ошибок
+        if python_response.error:
+            error = analysis_pb2.ErrorDetails()
+            error.code = "ANALYSIS_ERROR"
+            error.message = python_response.error
+            grpc_response.error.CopyFrom(error)
+            return grpc_response
+
+        # Копируем логи обработки
+        grpc_response.processing_log.extend(python_response.processing_log)
+        
+        # Описательная статистика
+        desc_stats_response = analysis_pb2.DescriptiveStatisticsResponse()
+        
+        # Дескриптивная статистика
+        for stat in python_response.descriptives:
+            pb_stat = analysis_pb2.DescriptiveStatistics()
+            pb_stat.variable_name = stat.variable_name
+            pb_stat.count = str(stat.count)  # Преобразуем в строку для совместимости
+            pb_stat.mean = stat.mean
+            pb_stat.median = stat.median
+            pb_stat.mode.extend([str(m) for m in stat.mode])  # Преобразуем в строки
+            pb_stat.variance = stat.variance
+            pb_stat.std_dev = stat.std_dev
+            pb_stat.variation_coefficient = stat.variation_coefficient
+            pb_stat.skewness = stat.skewness
+            pb_stat.kurtosis = stat.kurtosis
+            pb_stat.min_value = stat.min_value
+            pb_stat.max_value = stat.max_value
+            desc_stats_response.descriptives.append(pb_stat)
+        
+        # Гистограммы
+        for hist in python_response.histograms:
+            pb_hist = analysis_pb2.HistogramData()
+            pb_hist.column_name = hist.variable_name
+            pb_hist.bins.extend(hist.bins)
+            pb_hist.frequencies.extend(hist.frequencies)
+            desc_stats_response.histograms.append(pb_hist)
+        
+        # Доверительные интервалы
+        for ci in python_response.confidence_intervals:
+            pb_ci = analysis_pb2.ConfidenceInterval()
+            pb_ci.column_name = ci.variable_name
+            pb_ci.confidence_level = ci.confidence_level
+            pb_ci.lower_bound = ci.lower_bound
+            pb_ci.upper_bound = ci.upper_bound
+            pb_ci.mean = ci.point_estimate
+            pb_ci.standard_error = (ci.upper_bound - ci.lower_bound) / (2 * 1.96)  # Примерный расчет SE из CI
+            desc_stats_response.confidence_intervals.append(pb_ci)
+        
+        grpc_response.descriptive_stats.CopyFrom(desc_stats_response)
+        
+        # Тесты на нормальность
+        normality_response = analysis_pb2.NormalityTestsResponse()
+        
+        # Тесты Шапиро-Уилка
+        for test in python_response.normality_tests:
+            pb_test = analysis_pb2.NormalityTestResult()
+            pb_test.column_name = test.variable_name
+            pb_test.test_name = test.test_name
+            pb_test.statistic = test.statistic
+            pb_test.p_value = test.p_value
+            pb_test.is_normal = test.is_normal
+            normality_response.shapiro_wilk_results.append(pb_test)
+        
+        # Тесты хи-квадрат
+        for test in python_response.pearson_chi_square_results:
+            pb_test = analysis_pb2.PearsonChiSquareResult()
+            pb_test.column_name = test.variable_name
+            pb_test.statistic = test.statistic
+            pb_test.p_value = test.p_value
+            pb_test.degrees_of_freedom = test.degrees_of_freedom
+            pb_test.intervals = test.intervals
+            pb_test.is_normal = test.is_normal
+            normality_response.chi_square_results.append(pb_test)
+        
+        grpc_response.normality_tests.CopyFrom(normality_response)
+        
+        # Регрессионный анализ
+        if python_response.regressions and len(python_response.regressions) > 0:
+            regression_response = analysis_pb2.RegressionAnalysisResponse()
+            
+            # Берем первый анализ регрессии для базовой информации
+            first_regression = python_response.regressions[0]
+            regression_response.dependent_variable = first_regression.dependent_variable
+            regression_response.independent_variables.extend(first_regression.independent_variables)
+
+            # Данные для графика
+            if hasattr(first_regression, 'data_points') and first_regression.data_points:
+                for point in first_regression.data_points:
+                    data_point = analysis_pb2.DataPoint()
+                    data_point.x = point["x"] if isinstance(point, dict) else point.x
+                    data_point.y = point["y"] if isinstance(point, dict) else point.y
+                    regression_response.data_points.append(data_point)
+
+            # Модели регрессии
+            for reg in python_response.regressions:
+                reg_model = analysis_pb2.RegressionModel()
+                reg_model.regression_type = reg.model_type if hasattr(reg, 'model_type') and reg.model_type else "Linear"
+                reg_model.r_squared = reg.r_squared
+                reg_model.adjusted_r_squared = reg.adjusted_r_squared
+                reg_model.f_statistic = reg.f_statistic if hasattr(reg, 'f_statistic') else 0.0
+                reg_model.prob_f_statistic = reg.prob_f_statistic if hasattr(reg, 'prob_f_statistic') else 0.0
+                reg_model.sse = reg.sse if hasattr(reg, 'sse') else 0.0
+
+                # Коэффициенты
+                for coef in reg.coefficients:
+                    reg_coef = analysis_pb2.RegressionCoefficient()
+                    reg_coef.variable_name = coef.variable_name
+                    reg_coef.coefficient = coef.coefficient
+                    reg_coef.std_error = coef.standard_error
+                    reg_coef.t_statistic = coef.t_statistic
+                    reg_coef.p_value = coef.p_value
+                    reg_coef.confidence_interval_lower = coef.confidence_interval_lower
+                    reg_coef.confidence_interval_upper = coef.confidence_interval_upper
+                    reg_model.coefficients.append(reg_coef)
+
+                # Остатки
+                if hasattr(reg, 'residuals') and reg.residuals:
+                    reg_model.residuals.extend(reg.residuals)
+
+                # Анализ остатков
+                if hasattr(reg, 'residuals_normality') and reg.residuals_normality:
+                    residuals_analysis = analysis_pb2.ResidualsAnalysisResult()
+                    
+                    # QQ-график
+                    if hasattr(reg, 'qq_plot') and reg.qq_plot:
+                        qq_plot = analysis_pb2.QQPlotData()
+                        qq_plot.theoretical_quantiles.extend(reg.qq_plot.theoretical_quantiles)
+                        qq_plot.sample_quantiles.extend(reg.qq_plot.sample_quantiles)
+                        residuals_analysis.qq_plot.CopyFrom(qq_plot)
+                    
+                    # Гистограмма остатков
+                    if hasattr(reg, 'residuals_histogram') and reg.residuals_histogram:
+                        res_hist = analysis_pb2.HistogramData()
+                        res_hist.column_name = "Residuals"
+                        res_hist.bins.extend(reg.residuals_histogram.bins)
+                        res_hist.frequencies.extend(reg.residuals_histogram.frequencies)
+                        residuals_analysis.histogram.CopyFrom(res_hist)
+                    
+                    # Тест Шапиро-Уилка для остатков
+                    if hasattr(reg, 'residuals_normality'):
+                        norm_test = analysis_pb2.NormalityTestResult()
+                        norm_test.column_name = "Residuals"
+                        norm_test.test_name = reg.residuals_normality.test_name
+                        norm_test.statistic = reg.residuals_normality.statistic
+                        norm_test.p_value = reg.residuals_normality.p_value
+                        norm_test.is_normal = reg.residuals_normality.is_normal
+                        residuals_analysis.shapiro_test.CopyFrom(norm_test)
+                        
+                    reg_model.residuals_analysis.CopyFrom(residuals_analysis)
+
+                regression_response.models.append(reg_model)
+                
+            grpc_response.regression_analysis.CopyFrom(regression_response)
+
+        # Критерии Вилкоксона
+        has_wilcoxon_tests = WILCOXON_SIGNED_RANK_ANALYSIS in selected_analyses or MANN_WHITNEY_ANALYSIS in selected_analyses
+        if has_wilcoxon_tests:
+            # Всегда создаем объект WilcoxonTestsResponse, даже если результатов нет
+            wilcoxon_response = analysis_pb2.WilcoxonTestsResponse()
+            
+            # Лог для отладки
+            print(f"Debug: Wilcoxon tests requested. Selected analyses: {selected_analyses}")
+            print(f"Debug: wilcoxon_signed_rank_tests count: {len(python_response.wilcoxon_signed_rank_tests)}")
+            print(f"Debug: mann_whitney_tests count: {len(python_response.mann_whitney_tests)}")
+            
+            # Критерий знаковых рангов Вилкоксона
+            for test in python_response.wilcoxon_signed_rank_tests:
+                pb_test = analysis_pb2.WilcoxonSignedRankTestResult()
+                pb_test.test_type = test.test_type
+                pb_test.variable1 = test.variable1
+                pb_test.variable2 = test.variable2
+                pb_test.statistic = test.statistic
+                pb_test.p_value = test.p_value
+                pb_test.conclusion = test.conclusion
+                pb_test.sample_size = test.sample_size
+                wilcoxon_response.signed_rank_results.append(pb_test)
+                
+            # Критерий Манна-Уитни
+            for test in python_response.mann_whitney_tests:
+                pb_test = analysis_pb2.MannWhitneyTestResult()
+                pb_test.test_type = test.test_type
+                pb_test.group_column = test.group_column
+                pb_test.value_column = test.value_column
+                pb_test.group1 = test.group1
+                pb_test.group2 = test.group2
+                pb_test.group1_size = test.group1_size
+                pb_test.group2_size = test.group2_size
+                pb_test.group1_median = test.group1_median
+                pb_test.group2_median = test.group2_median
+                pb_test.statistic = test.statistic
+                pb_test.p_value = test.p_value
+                pb_test.conclusion = test.conclusion
+                wilcoxon_response.mann_whitney_results.append(pb_test)
+            
+            # Записываем данные в ответ, даже если списки результатов пустые
+            grpc_response.wilcoxon_tests.CopyFrom(wilcoxon_response)
+        
+        return grpc_response
 
 
 class GrpcServer:

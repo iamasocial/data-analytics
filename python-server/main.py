@@ -15,6 +15,7 @@ from internal.adapters.confidence_interval import ConfidenceIntervalAdapter
 from internal.adapters.goodness_of_fit import GoodnessOfFitAdapter
 from internal.adapters.regression import RegressionAdapter
 from internal.adapters.residuals_analysis import ResidualsAnalysisAdapter
+from internal.adapters.wilcoxon_test import WilcoxonTestAdapter
 
 # Импортируем сервисный слой
 from internal.core.services.analysis_service import AnalysisService
@@ -32,6 +33,7 @@ def main():
         goodness_of_fit = GoodnessOfFitAdapter()
         regression = RegressionAdapter()
         residuals_analysis = ResidualsAnalysisAdapter()
+        wilcoxon_test = WilcoxonTestAdapter()
         
         # Создаем экземпляр сервиса анализа
         analysis_service = AnalysisService(
@@ -41,7 +43,8 @@ def main():
             confidence_interval=confidence_interval,
             goodness_of_fit=goodness_of_fit,
             regression=regression,
-            residuals_analysis=residuals_analysis
+            residuals_analysis=residuals_analysis,
+            wilcoxon_test=wilcoxon_test
         )
         
         # Создаем и запускаем gRPC сервер

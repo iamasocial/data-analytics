@@ -16,18 +16,20 @@ class AnalysisRequest(_message.Message):
     def __init__(self, file_content: _Optional[bytes] = ..., file_name: _Optional[str] = ..., selected_analyses: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class AnalyzeDataResponse(_message.Message):
-    __slots__ = ("descriptive_stats", "normality_tests", "regression_analysis", "processing_log", "error")
+    __slots__ = ("descriptive_stats", "normality_tests", "regression_analysis", "processing_log", "error", "wilcoxon_tests")
     DESCRIPTIVE_STATS_FIELD_NUMBER: _ClassVar[int]
     NORMALITY_TESTS_FIELD_NUMBER: _ClassVar[int]
     REGRESSION_ANALYSIS_FIELD_NUMBER: _ClassVar[int]
     PROCESSING_LOG_FIELD_NUMBER: _ClassVar[int]
     ERROR_FIELD_NUMBER: _ClassVar[int]
+    WILCOXON_TESTS_FIELD_NUMBER: _ClassVar[int]
     descriptive_stats: DescriptiveStatisticsResponse
     normality_tests: NormalityTestsResponse
     regression_analysis: RegressionAnalysisResponse
     processing_log: _containers.RepeatedScalarFieldContainer[str]
     error: ErrorDetails
-    def __init__(self, descriptive_stats: _Optional[_Union[DescriptiveStatisticsResponse, _Mapping]] = ..., normality_tests: _Optional[_Union[NormalityTestsResponse, _Mapping]] = ..., regression_analysis: _Optional[_Union[RegressionAnalysisResponse, _Mapping]] = ..., processing_log: _Optional[_Iterable[str]] = ..., error: _Optional[_Union[ErrorDetails, _Mapping]] = ...) -> None: ...
+    wilcoxon_tests: WilcoxonTestsResponse
+    def __init__(self, descriptive_stats: _Optional[_Union[DescriptiveStatisticsResponse, _Mapping]] = ..., normality_tests: _Optional[_Union[NormalityTestsResponse, _Mapping]] = ..., regression_analysis: _Optional[_Union[RegressionAnalysisResponse, _Mapping]] = ..., processing_log: _Optional[_Iterable[str]] = ..., error: _Optional[_Union[ErrorDetails, _Mapping]] = ..., wilcoxon_tests: _Optional[_Union[WilcoxonTestsResponse, _Mapping]] = ...) -> None: ...
 
 class ErrorDetails(_message.Message):
     __slots__ = ("code", "message", "details")
@@ -140,6 +142,60 @@ class PearsonChiSquareResult(_message.Message):
     intervals: int
     is_normal: bool
     def __init__(self, column_name: _Optional[str] = ..., statistic: _Optional[float] = ..., p_value: _Optional[float] = ..., degrees_of_freedom: _Optional[int] = ..., intervals: _Optional[int] = ..., is_normal: bool = ...) -> None: ...
+
+class WilcoxonTestsResponse(_message.Message):
+    __slots__ = ("signed_rank_results", "mann_whitney_results")
+    SIGNED_RANK_RESULTS_FIELD_NUMBER: _ClassVar[int]
+    MANN_WHITNEY_RESULTS_FIELD_NUMBER: _ClassVar[int]
+    signed_rank_results: _containers.RepeatedCompositeFieldContainer[WilcoxonSignedRankTestResult]
+    mann_whitney_results: _containers.RepeatedCompositeFieldContainer[MannWhitneyTestResult]
+    def __init__(self, signed_rank_results: _Optional[_Iterable[_Union[WilcoxonSignedRankTestResult, _Mapping]]] = ..., mann_whitney_results: _Optional[_Iterable[_Union[MannWhitneyTestResult, _Mapping]]] = ...) -> None: ...
+
+class WilcoxonSignedRankTestResult(_message.Message):
+    __slots__ = ("test_type", "variable1", "variable2", "statistic", "p_value", "conclusion", "sample_size")
+    TEST_TYPE_FIELD_NUMBER: _ClassVar[int]
+    VARIABLE1_FIELD_NUMBER: _ClassVar[int]
+    VARIABLE2_FIELD_NUMBER: _ClassVar[int]
+    STATISTIC_FIELD_NUMBER: _ClassVar[int]
+    P_VALUE_FIELD_NUMBER: _ClassVar[int]
+    CONCLUSION_FIELD_NUMBER: _ClassVar[int]
+    SAMPLE_SIZE_FIELD_NUMBER: _ClassVar[int]
+    test_type: str
+    variable1: str
+    variable2: str
+    statistic: float
+    p_value: float
+    conclusion: str
+    sample_size: int
+    def __init__(self, test_type: _Optional[str] = ..., variable1: _Optional[str] = ..., variable2: _Optional[str] = ..., statistic: _Optional[float] = ..., p_value: _Optional[float] = ..., conclusion: _Optional[str] = ..., sample_size: _Optional[int] = ...) -> None: ...
+
+class MannWhitneyTestResult(_message.Message):
+    __slots__ = ("test_type", "group_column", "value_column", "group1", "group2", "group1_size", "group2_size", "group1_median", "group2_median", "statistic", "p_value", "conclusion")
+    TEST_TYPE_FIELD_NUMBER: _ClassVar[int]
+    GROUP_COLUMN_FIELD_NUMBER: _ClassVar[int]
+    VALUE_COLUMN_FIELD_NUMBER: _ClassVar[int]
+    GROUP1_FIELD_NUMBER: _ClassVar[int]
+    GROUP2_FIELD_NUMBER: _ClassVar[int]
+    GROUP1_SIZE_FIELD_NUMBER: _ClassVar[int]
+    GROUP2_SIZE_FIELD_NUMBER: _ClassVar[int]
+    GROUP1_MEDIAN_FIELD_NUMBER: _ClassVar[int]
+    GROUP2_MEDIAN_FIELD_NUMBER: _ClassVar[int]
+    STATISTIC_FIELD_NUMBER: _ClassVar[int]
+    P_VALUE_FIELD_NUMBER: _ClassVar[int]
+    CONCLUSION_FIELD_NUMBER: _ClassVar[int]
+    test_type: str
+    group_column: str
+    value_column: str
+    group1: str
+    group2: str
+    group1_size: int
+    group2_size: int
+    group1_median: float
+    group2_median: float
+    statistic: float
+    p_value: float
+    conclusion: str
+    def __init__(self, test_type: _Optional[str] = ..., group_column: _Optional[str] = ..., value_column: _Optional[str] = ..., group1: _Optional[str] = ..., group2: _Optional[str] = ..., group1_size: _Optional[int] = ..., group2_size: _Optional[int] = ..., group1_median: _Optional[float] = ..., group2_median: _Optional[float] = ..., statistic: _Optional[float] = ..., p_value: _Optional[float] = ..., conclusion: _Optional[str] = ...) -> None: ...
 
 class RegressionAnalysisResponse(_message.Message):
     __slots__ = ("dependent_variable", "independent_variables", "data_points", "models")

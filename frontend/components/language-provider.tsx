@@ -223,6 +223,113 @@ const translations: Translations = {
   deleteError: {
     ru: "Ошибка при удалении анализа",
     en: "Error deleting analysis"
+  },
+  // Анализ остатков
+  residuals_analysis: {
+    ru: "Анализ остатков",
+    en: "Residuals Analysis"
+  },
+  residuals_normality_test: {
+    ru: "Тест нормальности остатков",
+    en: "Residuals Normality Test"
+  },
+  residuals_histogram: {
+    ru: "Гистограмма остатков",
+    en: "Residuals Histogram"
+  },
+  qq_plot: {
+    ru: "QQ-график",
+    en: "QQ Plot"
+  },
+
+  // Тесты Вилкоксона
+  wilcoxon_tests: {
+    ru: "Тесты Вилкоксона",
+    en: "Wilcoxon Tests"
+  },
+  wilcoxon_signed_rank_test: {
+    ru: "Тест знаковых рангов Вилкоксона",
+    en: "Wilcoxon Signed Rank Test"
+  },
+  wilcoxon_signed_rank_description: {
+    ru: "Непараметрический тест для сравнения парных выборок",
+    en: "Nonparametric test for comparing paired samples"
+  },
+  mann_whitney_test: {
+    ru: "Тест Манна-Уитни (U-тест)",
+    en: "Mann-Whitney U Test"
+  },
+  mann_whitney_description: {
+    ru: "Непараметрический тест для сравнения двух независимых выборок",
+    en: "Nonparametric test for comparing two independent samples"
+  },
+  no_wilcoxon_signed_rank_results: {
+    ru: "Результаты теста знаковых рангов Вилкоксона отсутствуют",
+    en: "Wilcoxon Signed Rank Test results are missing"
+  },
+  no_mann_whitney_results: {
+    ru: "Результаты теста Манна-Уитни отсутствуют",
+    en: "Mann-Whitney U Test results are missing"
+  },
+  no_wilcoxon_tests_performed: {
+    ru: "Тесты Вилкоксона не выполнялись",
+    en: "Wilcoxon Tests were not performed"
+  },
+  variable1: {
+    ru: "Переменная 1",
+    en: "Variable 1"
+  },
+  variable2: {
+    ru: "Переменная 2",
+    en: "Variable 2"
+  },
+  sample_size: {
+    ru: "Размер выборки",
+    en: "Sample Size"
+  },
+  group_column: {
+    ru: "Группирующая переменная",
+    en: "Grouping Variable"
+  },
+  value_column: {
+    ru: "Тестируемая переменная",
+    en: "Test Variable"
+  },
+  group1: {
+    ru: "Группа 1",
+    en: "Group 1"
+  },
+  group2: {
+    ru: "Группа 2",
+    en: "Group 2"
+  },
+  group_sizes: {
+    ru: "Размеры групп",
+    en: "Group Sizes"
+  },
+  group_medians: {
+    ru: "Медианы групп",
+    en: "Group Medians"
+  },
+  statistic: {
+    ru: "Статистика",
+    en: "Statistic"
+  },
+  p_value: {
+    ru: "P-значение",
+    en: "P-value"
+  },
+  conclusion: {
+    ru: "Вывод",
+    en: "Conclusion"
+  },
+  statistic_header: {
+    ru: "Статистика",
+    en: "Statistic"
+  },
+  p_value_header: {
+    ru: "P-значение",
+    en: "P-value"
   }
 }
 

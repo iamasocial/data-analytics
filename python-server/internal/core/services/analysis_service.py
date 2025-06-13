@@ -12,7 +12,9 @@ from internal.core.domain.entities import (
     ConfidenceInterval,
     PearsonChiSquareResult,
     RegressionResult,
-    RegressionCoefficient
+    RegressionCoefficient,
+    WilcoxonTestResult,
+    MannWhitneyTestResult
 )
 from internal.core.ports.analysis_ports import (
     AnalysisServicePort,
@@ -24,6 +26,7 @@ from internal.core.ports.analysis_ports import (
     RegressionPort,
     ResidualsAnalysisPort
 )
+from internal.core.ports.wilcoxon_test_port import WilcoxonTestPort
 
 # Определим константы для имен анализов, чтобы избежать опечаток
 DESCRIPTIVE_STATS_ANALYSIS = "descriptive_stats"
@@ -32,6 +35,9 @@ REGRESSION_ANALYSIS = "regression"
 # Добавим также для Хи-квадрат и доверительных интервалов, если они будут отдельно выбираться
 CHI_SQUARE_ANALYSIS = "chi_square"
 CONFIDENCE_INTERVALS_ANALYSIS = "confidence_intervals"
+# Добавляем константы для критериев Вилкоксона
+WILCOXON_SIGNED_RANK_ANALYSIS = "wilcoxon_signed_rank"
+MANN_WHITNEY_ANALYSIS = "mann_whitney"
 
 
 class AnalysisService(AnalysisServicePort):
@@ -44,7 +50,8 @@ class AnalysisService(AnalysisServicePort):
                  confidence_interval: ConfidenceIntervalPort,
                  goodness_of_fit: GoodnessOfFitPort,
                  regression: RegressionPort,
-                 residuals_analysis: ResidualsAnalysisPort):
+                 residuals_analysis: ResidualsAnalysisPort,
+                 wilcoxon_test: Optional[WilcoxonTestPort] = None):
         self.data_loader = data_loader
         self.descriptive_stats = descriptive_stats
         self.normality_test = normality_test 
@@ -52,6 +59,7 @@ class AnalysisService(AnalysisServicePort):
         self.goodness_of_fit = goodness_of_fit
         self.regression = regression
         self.residuals_analysis = residuals_analysis
+        self.wilcoxon_test = wilcoxon_test
     
     def analyze_data(self, request: DataFileRequest) -> AnalysisResponse:
         """Анализирует данные из запроса и возвращает ответ с результатами анализа"""
@@ -157,8 +165,78 @@ class AnalysisService(AnalysisServicePort):
                         )
                         response.pearson_chi_square_results.append(chi2)
 
+                # --- Тест знаковых рангов Вилкоксона ---
+                if WILCOXON_SIGNED_RANK_ANALYSIS in selected_analyses and self.wilcoxon_test is not None:
+                    # Проверяем, указаны ли переменные для сравнения
+                    var1 = None
+                    var2 = None
+                    
+                    # Извлекаем имена переменных из списка selected_analyses
+                    for analysis in request.selected_analyses:
+                        if analysis.startswith("wilcoxon_var1:"):
+                            var1 = analysis[len("wilcoxon_var1:"):]
+                        elif analysis.startswith("wilcoxon_var2:"):
+                            var2 = analysis[len("wilcoxon_var2:"):]
+                    
+                    # Выполняем тест Вилкоксона
+                    wilcoxon_results, wilc_logs = self.wilcoxon_test.perform_wilcoxon_signed_rank_test(
+                        df, var1=var1, var2=var2
+                    )
+                    response.processing_log.extend(wilc_logs)
+                    
+                    for wilc_dict in wilcoxon_results:
+                        wilc_test = WilcoxonTestResult(
+                            test_type=wilc_dict.get("test_type", "Wilcoxon signed-rank test"),
+                            variable1=wilc_dict.get("variable1", ""),
+                            variable2=wilc_dict.get("variable2", ""),
+                            statistic=wilc_dict.get("statistic", 0.0) if pd.notna(wilc_dict.get("statistic")) else 0.0,
+                            p_value=wilc_dict.get("p_value", 0.0) if pd.notna(wilc_dict.get("p_value")) else 0.0,
+                            conclusion=wilc_dict.get("conclusion", ""),
+                            sample_size=wilc_dict.get("sample_size", 0)
+                        )
+                        response.wilcoxon_signed_rank_tests.append(wilc_test)
+                
+                # --- Тест Манна-Уитни ---
+                if MANN_WHITNEY_ANALYSIS in selected_analyses and self.wilcoxon_test is not None:
+                    # Проверяем, указаны ли переменные для теста
+                    group_column = None
+                    value_column = None
+                    
+                    # Извлекаем имена переменных из списка selected_analyses
+                    for analysis in request.selected_analyses:
+                        if analysis.startswith("mann_whitney_group:"):
+                            group_column = analysis[len("mann_whitney_group:"):]
+                        elif analysis.startswith("mann_whitney_value:"):
+                            value_column = analysis[len("mann_whitney_value:"):]
+                    
+                    # Проверяем, что указаны обе переменные
+                    if group_column is not None and value_column is not None:
+                        # Выполняем тест Манна-Уитни
+                        mw_results, mw_logs = self.wilcoxon_test.perform_mann_whitney_test(
+                            df, group_column=group_column, value_column=value_column
+                        )
+                        response.processing_log.extend(mw_logs)
+                        
+                        for mw_dict in mw_results:
+                            mw_test = MannWhitneyTestResult(
+                                test_type=mw_dict.get("test_type", "Mann-Whitney U test"),
+                                group_column=mw_dict.get("group_column", ""),
+                                value_column=mw_dict.get("value_column", ""),
+                                group1=mw_dict.get("group1", ""),
+                                group2=mw_dict.get("group2", ""),
+                                group1_size=mw_dict.get("group1_size", 0),
+                                group2_size=mw_dict.get("group2_size", 0),
+                                group1_median=mw_dict.get("group1_median", 0.0) if pd.notna(mw_dict.get("group1_median")) else 0.0,
+                                group2_median=mw_dict.get("group2_median", 0.0) if pd.notna(mw_dict.get("group2_median")) else 0.0,
+                                statistic=mw_dict.get("statistic", 0.0) if pd.notna(mw_dict.get("statistic")) else 0.0,
+                                p_value=mw_dict.get("p_value", 0.0) if pd.notna(mw_dict.get("p_value")) else 0.0,
+                                conclusion=mw_dict.get("conclusion", "")
+                            )
+                            response.mann_whitney_tests.append(mw_test)
+                    else:
+                        response.processing_log.append("Mann-Whitney test requires both group_column and value_column parameters")
+
                 # --- Доверительные интервалы (если "descriptive_stats" выбраны, т.к. они часто идут вместе) ---
-                # Можно вынести в отдельный ключ CONFIDENCE_INTERVALS_ANALYSIS, если нужно выбирать отдельно
                 if DESCRIPTIVE_STATS_ANALYSIS in selected_analyses:
                     ci_results, ci_logs = self.confidence_interval.calculate_confidence_intervals(df)
                     response.processing_log.extend(ci_logs)

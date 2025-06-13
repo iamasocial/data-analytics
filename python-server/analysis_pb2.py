@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0e\x61nalysis.proto\x12\x08\x61nalysis\"U\n\x0f\x41nalysisRequest\x12\x14\n\x0c\x66ile_content\x18\x01 \x01(\x0c\x12\x11\n\tfile_name\x18\x02 \x01(\t\x12\x19\n\x11selected_analyses\x18\x03 \x03(\t\"\x96\x02\n\x13\x41nalyzeDataResponse\x12\x42\n\x11\x64\x65scriptive_stats\x18\x01 \x01(\x0b\x32\'.analysis.DescriptiveStatisticsResponse\x12\x39\n\x0fnormality_tests\x18\x02 \x01(\x0b\x32 .analysis.NormalityTestsResponse\x12\x41\n\x13regression_analysis\x18\x03 \x01(\x0b\x32$.analysis.RegressionAnalysisResponse\x12\x16\n\x0eprocessing_log\x18\x04 \x03(\t\x12%\n\x05\x65rror\x18\x05 \x01(\x0b\x32\x16.analysis.ErrorDetails\">\n\x0c\x45rrorDetails\x12\x0c\n\x04\x63ode\x18\x01 \x01(\t\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\x0f\n\x07\x64\x65tails\x18\x03 \x03(\t\"\xbf\x01\n\x1d\x44\x65scriptiveStatisticsResponse\x12\x35\n\x0c\x64\x65scriptives\x18\x01 \x03(\x0b\x32\x1f.analysis.DescriptiveStatistics\x12+\n\nhistograms\x18\x02 \x03(\x0b\x32\x17.analysis.HistogramData\x12:\n\x14\x63onfidence_intervals\x18\x04 \x03(\x0b\x32\x1c.analysis.ConfidenceInterval\"\xf5\x01\n\x15\x44\x65scriptiveStatistics\x12\x15\n\rvariable_name\x18\x01 \x01(\t\x12\r\n\x05\x63ount\x18\x02 \x01(\t\x12\x0c\n\x04mean\x18\x03 \x01(\x01\x12\x0e\n\x06median\x18\x04 \x01(\x01\x12\x0c\n\x04mode\x18\x05 \x03(\t\x12\x10\n\x08variance\x18\x06 \x01(\x01\x12\x0f\n\x07std_dev\x18\x07 \x01(\x01\x12\x1d\n\x15variation_coefficient\x18\x08 \x01(\x01\x12\x10\n\x08skewness\x18\t \x01(\x01\x12\x10\n\x08kurtosis\x18\n \x01(\x01\x12\x11\n\tmin_value\x18\x0b \x01(\x01\x12\x11\n\tmax_value\x18\x0c \x01(\x01\"G\n\rHistogramData\x12\x13\n\x0b\x63olumn_name\x18\x01 \x01(\t\x12\x0c\n\x04\x62ins\x18\x02 \x03(\x01\x12\x13\n\x0b\x66requencies\x18\x03 \x03(\x05\"\x93\x01\n\x12\x43onfidenceInterval\x12\x13\n\x0b\x63olumn_name\x18\x01 \x01(\t\x12\x18\n\x10\x63onfidence_level\x18\x02 \x01(\x01\x12\x13\n\x0blower_bound\x18\x03 \x01(\x01\x12\x13\n\x0bupper_bound\x18\x04 \x01(\x01\x12\x0c\n\x04mean\x18\x05 \x01(\x01\x12\x16\n\x0estandard_error\x18\x06 \x01(\x01\"\x93\x01\n\x16NormalityTestsResponse\x12;\n\x14shapiro_wilk_results\x18\x01 \x03(\x0b\x32\x1d.analysis.NormalityTestResult\x12<\n\x12\x63hi_square_results\x18\x02 \x03(\x0b\x32 .analysis.PearsonChiSquareResult\"t\n\x13NormalityTestResult\x12\x13\n\x0b\x63olumn_name\x18\x01 \x01(\t\x12\x11\n\ttest_name\x18\x02 \x01(\t\x12\x11\n\tstatistic\x18\x03 \x01(\x01\x12\x0f\n\x07p_value\x18\x04 \x01(\x01\x12\x11\n\tis_normal\x18\x05 \x01(\x08\"\x93\x01\n\x16PearsonChiSquareResult\x12\x13\n\x0b\x63olumn_name\x18\x01 \x01(\t\x12\x11\n\tstatistic\x18\x02 \x01(\x01\x12\x0f\n\x07p_value\x18\x03 \x01(\x01\x12\x1a\n\x12\x64\x65grees_of_freedom\x18\x04 \x01(\x05\x12\x11\n\tintervals\x18\x05 \x01(\x05\x12\x11\n\tis_normal\x18\x06 \x01(\x08\"\xac\x01\n\x1aRegressionAnalysisResponse\x12\x1a\n\x12\x64\x65pendent_variable\x18\x01 \x01(\t\x12\x1d\n\x15independent_variables\x18\x02 \x03(\t\x12(\n\x0b\x64\x61ta_points\x18\x03 \x03(\x0b\x32\x13.analysis.DataPoint\x12)\n\x06models\x18\x04 \x03(\x0b\x32\x19.analysis.RegressionModel\"\x9e\x02\n\x0fRegressionModel\x12\x17\n\x0fregression_type\x18\x01 \x01(\t\x12\x11\n\tr_squared\x18\x02 \x01(\x01\x12\x1a\n\x12\x61\x64justed_r_squared\x18\x03 \x01(\x01\x12\x13\n\x0b\x66_statistic\x18\x04 \x01(\x01\x12\x18\n\x10prob_f_statistic\x18\x05 \x01(\x01\x12\x0b\n\x03sse\x18\x06 \x01(\x01\x12\x35\n\x0c\x63oefficients\x18\x07 \x03(\x0b\x32\x1f.analysis.RegressionCoefficient\x12\x11\n\tresiduals\x18\x08 \x03(\x01\x12=\n\x12residuals_analysis\x18\t \x01(\x0b\x32!.analysis.ResidualsAnalysisResult\"\xc2\x01\n\x15RegressionCoefficient\x12\x15\n\rvariable_name\x18\x01 \x01(\t\x12\x13\n\x0b\x63oefficient\x18\x02 \x01(\x01\x12\x11\n\tstd_error\x18\x03 \x01(\x01\x12\x13\n\x0bt_statistic\x18\x04 \x01(\x01\x12\x0f\n\x07p_value\x18\x05 \x01(\x01\x12!\n\x19\x63onfidence_interval_lower\x18\x06 \x01(\x01\x12!\n\x19\x63onfidence_interval_upper\x18\x07 \x01(\x01\"!\n\tDataPoint\x12\t\n\x01x\x18\x01 \x01(\x01\x12\t\n\x01y\x18\x02 \x01(\x01\"\xa1\x01\n\x17ResidualsAnalysisResult\x12\x33\n\x0cshapiro_test\x18\x01 \x01(\x0b\x32\x1d.analysis.NormalityTestResult\x12*\n\thistogram\x18\x02 \x01(\x0b\x32\x17.analysis.HistogramData\x12%\n\x07qq_plot\x18\x03 \x01(\x0b\x32\x14.analysis.QQPlotData\"E\n\nQQPlotData\x12\x1d\n\x15theoretical_quantiles\x18\x01 \x03(\x01\x12\x18\n\x10sample_quantiles\x18\x02 \x03(\x01\x32Z\n\x0f\x41nalysisService\x12G\n\x0b\x41nalyzeData\x12\x19.analysis.AnalysisRequest\x1a\x1d.analysis.AnalyzeDataResponseB\x17Z\x15./go-server/generatedb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0e\x61nalysis.proto\x12\x08\x61nalysis\"U\n\x0f\x41nalysisRequest\x12\x14\n\x0c\x66ile_content\x18\x01 \x01(\x0c\x12\x11\n\tfile_name\x18\x02 \x01(\t\x12\x19\n\x11selected_analyses\x18\x03 \x03(\t\"\xcf\x02\n\x13\x41nalyzeDataResponse\x12\x42\n\x11\x64\x65scriptive_stats\x18\x01 \x01(\x0b\x32\'.analysis.DescriptiveStatisticsResponse\x12\x39\n\x0fnormality_tests\x18\x02 \x01(\x0b\x32 .analysis.NormalityTestsResponse\x12\x41\n\x13regression_analysis\x18\x03 \x01(\x0b\x32$.analysis.RegressionAnalysisResponse\x12\x16\n\x0eprocessing_log\x18\x04 \x03(\t\x12%\n\x05\x65rror\x18\x05 \x01(\x0b\x32\x16.analysis.ErrorDetails\x12\x37\n\x0ewilcoxon_tests\x18\x06 \x01(\x0b\x32\x1f.analysis.WilcoxonTestsResponse\">\n\x0c\x45rrorDetails\x12\x0c\n\x04\x63ode\x18\x01 \x01(\t\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\x0f\n\x07\x64\x65tails\x18\x03 \x03(\t\"\xbf\x01\n\x1d\x44\x65scriptiveStatisticsResponse\x12\x35\n\x0c\x64\x65scriptives\x18\x01 \x03(\x0b\x32\x1f.analysis.DescriptiveStatistics\x12+\n\nhistograms\x18\x02 \x03(\x0b\x32\x17.analysis.HistogramData\x12:\n\x14\x63onfidence_intervals\x18\x04 \x03(\x0b\x32\x1c.analysis.ConfidenceInterval\"\xf5\x01\n\x15\x44\x65scriptiveStatistics\x12\x15\n\rvariable_name\x18\x01 \x01(\t\x12\r\n\x05\x63ount\x18\x02 \x01(\t\x12\x0c\n\x04mean\x18\x03 \x01(\x01\x12\x0e\n\x06median\x18\x04 \x01(\x01\x12\x0c\n\x04mode\x18\x05 \x03(\t\x12\x10\n\x08variance\x18\x06 \x01(\x01\x12\x0f\n\x07std_dev\x18\x07 \x01(\x01\x12\x1d\n\x15variation_coefficient\x18\x08 \x01(\x01\x12\x10\n\x08skewness\x18\t \x01(\x01\x12\x10\n\x08kurtosis\x18\n \x01(\x01\x12\x11\n\tmin_value\x18\x0b \x01(\x01\x12\x11\n\tmax_value\x18\x0c \x01(\x01\"G\n\rHistogramData\x12\x13\n\x0b\x63olumn_name\x18\x01 \x01(\t\x12\x0c\n\x04\x62ins\x18\x02 \x03(\x01\x12\x13\n\x0b\x66requencies\x18\x03 \x03(\x05\"\x93\x01\n\x12\x43onfidenceInterval\x12\x13\n\x0b\x63olumn_name\x18\x01 \x01(\t\x12\x18\n\x10\x63onfidence_level\x18\x02 \x01(\x01\x12\x13\n\x0blower_bound\x18\x03 \x01(\x01\x12\x13\n\x0bupper_bound\x18\x04 \x01(\x01\x12\x0c\n\x04mean\x18\x05 \x01(\x01\x12\x16\n\x0estandard_error\x18\x06 \x01(\x01\"\x93\x01\n\x16NormalityTestsResponse\x12;\n\x14shapiro_wilk_results\x18\x01 \x03(\x0b\x32\x1d.analysis.NormalityTestResult\x12<\n\x12\x63hi_square_results\x18\x02 \x03(\x0b\x32 .analysis.PearsonChiSquareResult\"t\n\x13NormalityTestResult\x12\x13\n\x0b\x63olumn_name\x18\x01 \x01(\t\x12\x11\n\ttest_name\x18\x02 \x01(\t\x12\x11\n\tstatistic\x18\x03 \x01(\x01\x12\x0f\n\x07p_value\x18\x04 \x01(\x01\x12\x11\n\tis_normal\x18\x05 \x01(\x08\"\x93\x01\n\x16PearsonChiSquareResult\x12\x13\n\x0b\x63olumn_name\x18\x01 \x01(\t\x12\x11\n\tstatistic\x18\x02 \x01(\x01\x12\x0f\n\x07p_value\x18\x03 \x01(\x01\x12\x1a\n\x12\x64\x65grees_of_freedom\x18\x04 \x01(\x05\x12\x11\n\tintervals\x18\x05 \x01(\x05\x12\x11\n\tis_normal\x18\x06 \x01(\x08\"\x9b\x01\n\x15WilcoxonTestsResponse\x12\x43\n\x13signed_rank_results\x18\x01 \x03(\x0b\x32&.analysis.WilcoxonSignedRankTestResult\x12=\n\x14mann_whitney_results\x18\x02 \x03(\x0b\x32\x1f.analysis.MannWhitneyTestResult\"\xa4\x01\n\x1cWilcoxonSignedRankTestResult\x12\x11\n\ttest_type\x18\x01 \x01(\t\x12\x11\n\tvariable1\x18\x02 \x01(\t\x12\x11\n\tvariable2\x18\x03 \x01(\t\x12\x11\n\tstatistic\x18\x04 \x01(\x01\x12\x0f\n\x07p_value\x18\x05 \x01(\x01\x12\x12\n\nconclusion\x18\x06 \x01(\t\x12\x13\n\x0bsample_size\x18\x07 \x01(\x05\"\x86\x02\n\x15MannWhitneyTestResult\x12\x11\n\ttest_type\x18\x01 \x01(\t\x12\x14\n\x0cgroup_column\x18\x02 \x01(\t\x12\x14\n\x0cvalue_column\x18\x03 \x01(\t\x12\x0e\n\x06group1\x18\x04 \x01(\t\x12\x0e\n\x06group2\x18\x05 \x01(\t\x12\x13\n\x0bgroup1_size\x18\x06 \x01(\x05\x12\x13\n\x0bgroup2_size\x18\x07 \x01(\x05\x12\x15\n\rgroup1_median\x18\x08 \x01(\x01\x12\x15\n\rgroup2_median\x18\t \x01(\x01\x12\x11\n\tstatistic\x18\n \x01(\x01\x12\x0f\n\x07p_value\x18\x0b \x01(\x01\x12\x12\n\nconclusion\x18\x0c \x01(\t\"\xac\x01\n\x1aRegressionAnalysisResponse\x12\x1a\n\x12\x64\x65pendent_variable\x18\x01 \x01(\t\x12\x1d\n\x15independent_variables\x18\x02 \x03(\t\x12(\n\x0b\x64\x61ta_points\x18\x03 \x03(\x0b\x32\x13.analysis.DataPoint\x12)\n\x06models\x18\x04 \x03(\x0b\x32\x19.analysis.RegressionModel\"\x9e\x02\n\x0fRegressionModel\x12\x17\n\x0fregression_type\x18\x01 \x01(\t\x12\x11\n\tr_squared\x18\x02 \x01(\x01\x12\x1a\n\x12\x61\x64justed_r_squared\x18\x03 \x01(\x01\x12\x13\n\x0b\x66_statistic\x18\x04 \x01(\x01\x12\x18\n\x10prob_f_statistic\x18\x05 \x01(\x01\x12\x0b\n\x03sse\x18\x06 \x01(\x01\x12\x35\n\x0c\x63oefficients\x18\x07 \x03(\x0b\x32\x1f.analysis.RegressionCoefficient\x12\x11\n\tresiduals\x18\x08 \x03(\x01\x12=\n\x12residuals_analysis\x18\t \x01(\x0b\x32!.analysis.ResidualsAnalysisResult\"\xc2\x01\n\x15RegressionCoefficient\x12\x15\n\rvariable_name\x18\x01 \x01(\t\x12\x13\n\x0b\x63oefficient\x18\x02 \x01(\x01\x12\x11\n\tstd_error\x18\x03 \x01(\x01\x12\x13\n\x0bt_statistic\x18\x04 \x01(\x01\x12\x0f\n\x07p_value\x18\x05 \x01(\x01\x12!\n\x19\x63onfidence_interval_lower\x18\x06 \x01(\x01\x12!\n\x19\x63onfidence_interval_upper\x18\x07 \x01(\x01\"!\n\tDataPoint\x12\t\n\x01x\x18\x01 \x01(\x01\x12\t\n\x01y\x18\x02 \x01(\x01\"\xa1\x01\n\x17ResidualsAnalysisResult\x12\x33\n\x0cshapiro_test\x18\x01 \x01(\x0b\x32\x1d.analysis.NormalityTestResult\x12*\n\thistogram\x18\x02 \x01(\x0b\x32\x17.analysis.HistogramData\x12%\n\x07qq_plot\x18\x03 \x01(\x0b\x32\x14.analysis.QQPlotData\"E\n\nQQPlotData\x12\x1d\n\x15theoretical_quantiles\x18\x01 \x03(\x01\x12\x18\n\x10sample_quantiles\x18\x02 \x03(\x01\x32Z\n\x0f\x41nalysisService\x12G\n\x0b\x41nalyzeData\x12\x19.analysis.AnalysisRequest\x1a\x1d.analysis.AnalyzeDataResponseB\x17Z\x15./go-server/generatedb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -35,35 +35,41 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_ANALYSISREQUEST']._serialized_start=28
   _globals['_ANALYSISREQUEST']._serialized_end=113
   _globals['_ANALYZEDATARESPONSE']._serialized_start=116
-  _globals['_ANALYZEDATARESPONSE']._serialized_end=394
-  _globals['_ERRORDETAILS']._serialized_start=396
-  _globals['_ERRORDETAILS']._serialized_end=458
-  _globals['_DESCRIPTIVESTATISTICSRESPONSE']._serialized_start=461
-  _globals['_DESCRIPTIVESTATISTICSRESPONSE']._serialized_end=652
-  _globals['_DESCRIPTIVESTATISTICS']._serialized_start=655
-  _globals['_DESCRIPTIVESTATISTICS']._serialized_end=900
-  _globals['_HISTOGRAMDATA']._serialized_start=902
-  _globals['_HISTOGRAMDATA']._serialized_end=973
-  _globals['_CONFIDENCEINTERVAL']._serialized_start=976
-  _globals['_CONFIDENCEINTERVAL']._serialized_end=1123
-  _globals['_NORMALITYTESTSRESPONSE']._serialized_start=1126
-  _globals['_NORMALITYTESTSRESPONSE']._serialized_end=1273
-  _globals['_NORMALITYTESTRESULT']._serialized_start=1275
-  _globals['_NORMALITYTESTRESULT']._serialized_end=1391
-  _globals['_PEARSONCHISQUARERESULT']._serialized_start=1394
-  _globals['_PEARSONCHISQUARERESULT']._serialized_end=1541
-  _globals['_REGRESSIONANALYSISRESPONSE']._serialized_start=1544
-  _globals['_REGRESSIONANALYSISRESPONSE']._serialized_end=1716
-  _globals['_REGRESSIONMODEL']._serialized_start=1719
-  _globals['_REGRESSIONMODEL']._serialized_end=2005
-  _globals['_REGRESSIONCOEFFICIENT']._serialized_start=2008
-  _globals['_REGRESSIONCOEFFICIENT']._serialized_end=2202
-  _globals['_DATAPOINT']._serialized_start=2204
-  _globals['_DATAPOINT']._serialized_end=2237
-  _globals['_RESIDUALSANALYSISRESULT']._serialized_start=2240
-  _globals['_RESIDUALSANALYSISRESULT']._serialized_end=2401
-  _globals['_QQPLOTDATA']._serialized_start=2403
-  _globals['_QQPLOTDATA']._serialized_end=2472
-  _globals['_ANALYSISSERVICE']._serialized_start=2474
-  _globals['_ANALYSISSERVICE']._serialized_end=2564
+  _globals['_ANALYZEDATARESPONSE']._serialized_end=451
+  _globals['_ERRORDETAILS']._serialized_start=453
+  _globals['_ERRORDETAILS']._serialized_end=515
+  _globals['_DESCRIPTIVESTATISTICSRESPONSE']._serialized_start=518
+  _globals['_DESCRIPTIVESTATISTICSRESPONSE']._serialized_end=709
+  _globals['_DESCRIPTIVESTATISTICS']._serialized_start=712
+  _globals['_DESCRIPTIVESTATISTICS']._serialized_end=957
+  _globals['_HISTOGRAMDATA']._serialized_start=959
+  _globals['_HISTOGRAMDATA']._serialized_end=1030
+  _globals['_CONFIDENCEINTERVAL']._serialized_start=1033
+  _globals['_CONFIDENCEINTERVAL']._serialized_end=1180
+  _globals['_NORMALITYTESTSRESPONSE']._serialized_start=1183
+  _globals['_NORMALITYTESTSRESPONSE']._serialized_end=1330
+  _globals['_NORMALITYTESTRESULT']._serialized_start=1332
+  _globals['_NORMALITYTESTRESULT']._serialized_end=1448
+  _globals['_PEARSONCHISQUARERESULT']._serialized_start=1451
+  _globals['_PEARSONCHISQUARERESULT']._serialized_end=1598
+  _globals['_WILCOXONTESTSRESPONSE']._serialized_start=1601
+  _globals['_WILCOXONTESTSRESPONSE']._serialized_end=1756
+  _globals['_WILCOXONSIGNEDRANKTESTRESULT']._serialized_start=1759
+  _globals['_WILCOXONSIGNEDRANKTESTRESULT']._serialized_end=1923
+  _globals['_MANNWHITNEYTESTRESULT']._serialized_start=1926
+  _globals['_MANNWHITNEYTESTRESULT']._serialized_end=2188
+  _globals['_REGRESSIONANALYSISRESPONSE']._serialized_start=2191
+  _globals['_REGRESSIONANALYSISRESPONSE']._serialized_end=2363
+  _globals['_REGRESSIONMODEL']._serialized_start=2366
+  _globals['_REGRESSIONMODEL']._serialized_end=2652
+  _globals['_REGRESSIONCOEFFICIENT']._serialized_start=2655
+  _globals['_REGRESSIONCOEFFICIENT']._serialized_end=2849
+  _globals['_DATAPOINT']._serialized_start=2851
+  _globals['_DATAPOINT']._serialized_end=2884
+  _globals['_RESIDUALSANALYSISRESULT']._serialized_start=2887
+  _globals['_RESIDUALSANALYSISRESULT']._serialized_end=3048
+  _globals['_QQPLOTDATA']._serialized_start=3050
+  _globals['_QQPLOTDATA']._serialized_end=3119
+  _globals['_ANALYSISSERVICE']._serialized_start=3121
+  _globals['_ANALYSISSERVICE']._serialized_end=3211
 # @@protoc_insertion_point(module_scope)

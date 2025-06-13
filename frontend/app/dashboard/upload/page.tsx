@@ -79,6 +79,56 @@ interface AnalysisResultType { // More specific type for analysisResult state
   descriptive_stats?: any; // Replace any with more specific types if available
   normality_tests?: any;   // Replace any with more specific types if available
   regression_analysis?: RegressionAnalysisResult;
+  wilcoxon_tests?: {
+    // Поддержка snake_case формата
+    signed_rank_results?: Array<{
+      test_type: string;
+      variable1: string;
+      variable2: string;
+      statistic: number;
+      p_value: number;
+      conclusion: string;
+      sample_size: number;
+    }>;
+    mann_whitney_results?: Array<{
+      test_type: string;
+      group_column: string;
+      value_column: string;
+      group1: string;
+      group2: string;
+      group1_size: number;
+      group2_size: number;
+      group1_median: number;
+      group2_median: number;
+      statistic: number;
+      p_value: number;
+      conclusion: string;
+    }>;
+    // Поддержка camelCase формата
+    signedRankResults?: Array<{
+      testType: string;
+      variable1: string;
+      variable2: string;
+      statistic: number;
+      pValue: number;
+      conclusion: string;
+      sampleSize: number;
+    }>;
+    mannWhitneyResults?: Array<{
+      testType: string;
+      groupColumn: string;
+      valueColumn: string;
+      group1: string;
+      group2: string;
+      group1Size: number;
+      group2Size: number;
+      group1Median: number;
+      group2Median: number;
+      statistic: number;
+      pValue: number;
+      conclusion: string;
+    }>;
+  };
   // Add other potential top-level keys from your API response here
 }
 
@@ -228,7 +278,14 @@ export default function UploadPage() {
     descriptive_stats: true,
     normality_test: true,
     regression: false,
+    wilcoxon_signed_rank: false,
+    mann_whitney: false
   });
+  // Переменные для тестов Вилкоксона
+  const [wilcoxonVar1, setWilcoxonVar1] = useState<string>("");
+  const [wilcoxonVar2, setWilcoxonVar2] = useState<string>("");
+  const [mannWhitneyGroup, setMannWhitneyGroup] = useState<string>("");
+  const [mannWhitneyValue, setMannWhitneyValue] = useState<string>("");
   const [fileColumns, setFileColumns] = useState<string[]>([]);
   const [dependentVariable, setDependentVariable] = useState<string>("");
   const [independentVariable, setIndependentVariable] = useState<string>("");
@@ -321,6 +378,10 @@ export default function UploadPage() {
     setFileColumns([])
     setDependentVariable("")
     setIndependentVariable("")
+    setWilcoxonVar1("")
+    setWilcoxonVar2("")
+    setMannWhitneyGroup("")
+    setMannWhitneyValue("")
     setUploadStatus("idle")
     setUploadProgress(0)
     setAnalysisResult(null)
@@ -344,6 +405,10 @@ export default function UploadPage() {
     setFileColumns([])
     setDependentVariable("")
     setIndependentVariable("")
+    setWilcoxonVar1("")
+    setWilcoxonVar2("")
+    setMannWhitneyGroup("")
+    setMannWhitneyValue("")
     setUploadStatus("idle")
     setUploadProgress(0)
     setSelectedRegressionType("")
@@ -475,8 +540,37 @@ export default function UploadPage() {
         });
         return;
       }
+      // Добавляем regression как анализ и отдельно переменные без префиксов
       formData.append("dependent_variable", dependentVariable);
       formData.append("independent_variable", independentVariable);
+    }
+    
+    // Проверка и добавление параметров для теста знаковых рангов Вилкоксона
+    if (selectedAnalysesOptions.wilcoxon_signed_rank) {
+      if (!wilcoxonVar1 || !wilcoxonVar2) {
+        toast({
+          title: "Переменные для теста Вилкоксона не выбраны",
+          description: "Пожалуйста, выберите две переменные для сравнения.",
+          variant: "destructive",
+        });
+        return;
+      }
+      formData.append("selected_analyses", `wilcoxon_var1:${wilcoxonVar1}`);
+      formData.append("selected_analyses", `wilcoxon_var2:${wilcoxonVar2}`);
+    }
+    
+    // Проверка и добавление параметров для теста Манна-Уитни
+    if (selectedAnalysesOptions.mann_whitney) {
+      if (!mannWhitneyGroup || !mannWhitneyValue) {
+        toast({
+          title: "Переменные для теста Манна-Уитни не выбраны",
+          description: "Пожалуйста, выберите группирующую переменную и переменную значений.",
+          variant: "destructive",
+        });
+        return;
+      }
+      formData.append("selected_analyses", `mann_whitney_group:${mannWhitneyGroup}`);
+      formData.append("selected_analyses", `mann_whitney_value:${mannWhitneyValue}`);
     }
 
     setUploading(true);
@@ -532,6 +626,23 @@ export default function UploadPage() {
       }
 
       const results = await response.json();
+      
+      // Добавляем дополнительную обработку для совместимости с разными форматами имен полей
+      console.log("Original API results:", results);
+      
+      // Проверяем и преобразуем поля тестов Вилкоксона, если нужно
+      if (results.wilcoxon_tests) {
+        // Копируем snake_case поля в camelCase для совместимости
+        if (results.wilcoxon_tests.signed_rank_results && !results.wilcoxon_tests.signedRankResults) {
+          results.wilcoxon_tests.signedRankResults = results.wilcoxon_tests.signed_rank_results;
+        }
+        if (results.wilcoxon_tests.mann_whitney_results && !results.wilcoxon_tests.mannWhitneyResults) {
+          results.wilcoxon_tests.mannWhitneyResults = results.wilcoxon_tests.mann_whitney_results;
+        }
+        
+        console.log("Modified wilcoxon_tests:", results.wilcoxon_tests);
+      }
+      
       setAnalysisResult(results);
       setUploadProgress(100);
       setUploadStatus("success");
@@ -722,6 +833,32 @@ export default function UploadPage() {
                       Регрессия
                     </Label>
                   </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="wilcoxon_signed_rank"
+                      checked={selectedAnalysesOptions.wilcoxon_signed_rank}
+                      onCheckedChange={(checked) =>
+                        setSelectedAnalysesOptions((prev) => ({ ...prev, wilcoxon_signed_rank: !!checked }))
+                      }
+                      disabled={uploading}
+                    />
+                    <Label htmlFor="wilcoxon_signed_rank" className="cursor-pointer">
+                      Тест знаковых рангов Вилкоксона
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="mann_whitney"
+                      checked={selectedAnalysesOptions.mann_whitney}
+                      onCheckedChange={(checked) =>
+                        setSelectedAnalysesOptions((prev) => ({ ...prev, mann_whitney: !!checked }))
+                      }
+                      disabled={uploading}
+                    />
+                    <Label htmlFor="mann_whitney" className="cursor-pointer">
+                      Тест Манна-Уитни
+                    </Label>
+                  </div>
                 </div>
               </div>
               {/* End Analysis Selection Checkboxes */}
@@ -765,6 +902,88 @@ export default function UploadPage() {
                 </div>
               )}
               {/* End Regression Variable Selection */}
+
+              {/* Wilcoxon Signed Rank Test Variable Selection */}
+              {selectedAnalysesOptions.wilcoxon_signed_rank && fileColumns.length > 0 && (
+                <div className="mt-4 p-4 border rounded-md bg-gray-50">
+                  <h3 className="font-medium mb-3">Переменные для теста знаковых рангов Вилкоксона:</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="wilcoxon-var1">Первая переменная:</Label>
+                      <select
+                        id="wilcoxon-var1"
+                        value={wilcoxonVar1}
+                        onChange={(e) => setWilcoxonVar1(e.target.value)}
+                        className="w-full p-2 border rounded-md"
+                        disabled={uploading}
+                      >
+                        <option value="">Выберите переменную</option>
+                        {fileColumns.map((column) => (
+                          <option key={`wilc1-${column}`} value={column}>{column}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="wilcoxon-var2">Вторая переменная:</Label>
+                      <select
+                        id="wilcoxon-var2"
+                        value={wilcoxonVar2}
+                        onChange={(e) => setWilcoxonVar2(e.target.value)}
+                        className="w-full p-2 border rounded-md"
+                        disabled={uploading}
+                      >
+                        <option value="">Выберите переменную</option>
+                        {fileColumns.map((column) => (
+                          <option key={`wilc2-${column}`} value={column}>{column}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-sm text-gray-500">Выберите пару переменных для сравнения. Тест требует минимум 6 значений без пропусков (NA).</p>
+                </div>
+              )}
+              {/* End Wilcoxon Signed Rank Test Variable Selection */}
+
+              {/* Mann-Whitney Test Variable Selection */}
+              {selectedAnalysesOptions.mann_whitney && fileColumns.length > 0 && (
+                <div className="mt-4 p-4 border rounded-md bg-gray-50">
+                  <h3 className="font-medium mb-3">Переменные для теста Манна-Уитни:</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="mann-whitney-group">Группирующая переменная:</Label>
+                      <select
+                        id="mann-whitney-group"
+                        value={mannWhitneyGroup}
+                        onChange={(e) => setMannWhitneyGroup(e.target.value)}
+                        className="w-full p-2 border rounded-md"
+                        disabled={uploading}
+                      >
+                        <option value="">Выберите переменную</option>
+                        {fileColumns.map((column) => (
+                          <option key={`mw-group-${column}`} value={column}>{column}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="mann-whitney-value">Значения для сравнения:</Label>
+                      <select
+                        id="mann-whitney-value"
+                        value={mannWhitneyValue}
+                        onChange={(e) => setMannWhitneyValue(e.target.value)}
+                        className="w-full p-2 border rounded-md"
+                        disabled={uploading}
+                      >
+                        <option value="">Выберите переменную</option>
+                        {fileColumns.map((column) => (
+                          <option key={`mw-value-${column}`} value={column}>{column}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-sm text-gray-500">Группирующая переменная должна содержать ровно 2 уникальных значения, а в каждой группе должно быть минимум 5 значений без пропусков (NA).</p>
+                </div>
+              )}
+              {/* End Mann-Whitney Test Variable Selection */}
 
               {uploadStatus !== "idle" && (
                 <div className="mt-4 space-y-2">
@@ -837,8 +1056,17 @@ export default function UploadPage() {
             <CardTitle>Результаты Анализа</CardTitle>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="normality-test" className="w-full">
-              <TabsList className="grid w-full grid-cols-3 mb-4">
+            <Tabs defaultValue={
+              // Автоматически выбираем вкладку на основе наличия данных
+              (analysisResult?.wilcoxon_tests?.signed_rank_results || 
+               analysisResult?.wilcoxon_tests?.signedRankResults || 
+               analysisResult?.wilcoxon_tests?.mann_whitney_results || 
+               analysisResult?.wilcoxon_tests?.mannWhitneyResults) ? "wilcoxon" : 
+              analysisResult?.normality_tests ? "normality-test" : 
+              analysisResult?.descriptive_stats ? "descriptive-stats" : 
+              "normality-test"
+            } className="w-full">
+              <TabsList className="grid w-full grid-cols-4 mb-4">
                 {analysisResult?.descriptive_stats && (
                     <TabsTrigger value="descriptive-stats">{t("results.tabs.descriptiveStats")}</TabsTrigger>
                 )}
@@ -848,6 +1076,10 @@ export default function UploadPage() {
                 {analysisResult?.regression_analysis && (
                     <TabsTrigger value="regression">{t("results.tabs.regression")}</TabsTrigger>
                 )}
+                {/* Тесты Вилкоксона - показываем всегда, если были выбраны */}
+                {selectedAnalysesOptions.wilcoxon_signed_rank || selectedAnalysesOptions.mann_whitney ? (
+                    <TabsTrigger value="wilcoxon">{t("wilcoxon_tests")}</TabsTrigger>
+                ) : null}
               </TabsList>
 
               {analysisResult?.descriptive_stats && (
@@ -1244,6 +1476,152 @@ export default function UploadPage() {
               </TabsContent>
               )}
 
+              {/* Показываем вкладку, если были выбраны тесты Вилкоксона */}
+              {(selectedAnalysesOptions.wilcoxon_signed_rank || selectedAnalysesOptions.mann_whitney) && (
+                <TabsContent value="wilcoxon">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>{t("wilcoxon_tests")}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      {/* Информация о выбранных тестах */}
+                      <div className="mb-4 p-2 bg-blue-50 border border-blue-300 rounded-md">
+                        <h3 className="font-medium">Статус выполнения тестов Вилкоксона:</h3>
+                        <div className="grid grid-cols-2 gap-4 mt-2">
+                          <div>
+                            <p className="font-medium">Тест знаковых рангов Вилкоксона:</p>
+                            <p className="ml-2">{selectedAnalysesOptions.wilcoxon_signed_rank ? "✅ Выбран" : "❌ Не выбран"}</p>
+                          </div>
+                          <div>
+                            <p className="font-medium">Тест Манна-Уитни:</p>
+                            <p className="ml-2">{selectedAnalysesOptions.mann_whitney ? "✅ Выбран" : "❌ Не выбран"}</p>
+                          </div>
+                        </div>
+                        <p className="mt-2">
+                          {!analysisResult?.wilcoxon_tests ? 
+                            "⚠️ Результаты тестов отсутствуют. Возможно, тесты не применимы к выбранным данным или произошла ошибка." : 
+                            "✅ Результаты тестов получены и отображены ниже."}
+                        </p>
+                      </div>
+                      {/* Wilcoxon Signed Rank Test Results - учет null в данных */}
+                      {analysisResult?.wilcoxon_tests && (
+                        (analysisResult.wilcoxon_tests?.signed_rank_results && 
+                         analysisResult.wilcoxon_tests?.signed_rank_results.length > 0) || 
+                        (analysisResult.wilcoxon_tests?.signedRankResults && 
+                         analysisResult.wilcoxon_tests?.signedRankResults.length > 0)
+                      ) && (
+                        <div>
+                          <h3 className="text-lg font-semibold mb-4">{t("wilcoxon_signed_rank_test")}</h3>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>{t("variable1")}</TableHead>
+                                <TableHead>{t("variable2")}</TableHead>
+                                <TableHead>{t("sample_size")}</TableHead>
+                                <TableHead>{t("statistic")}</TableHead>
+                                <TableHead>{t("p_value")}</TableHead>
+                                <TableHead>{t("conclusion")}</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {/* Используем любой доступный формат данных */}
+                              {/* @ts-ignore - игнорируем проверку типов из-за разных форматов имен полей */}
+                              {(analysisResult.wilcoxon_tests?.signed_rank_results || 
+                                analysisResult.wilcoxon_tests?.signedRankResults || []).map((result: any, index: number) => (
+                                <TableRow key={`wsr-${index}`}>
+                                  <TableCell>{result.variable1}</TableCell>
+                                  <TableCell>{result.variable2}</TableCell>
+                                  <TableCell>{result.sample_size || result.sampleSize}</TableCell>
+                                  <TableCell>{formatNumber(result.statistic, 4)}</TableCell>
+                                  <TableCell>{formatNumber(result.p_value || result.pValue, 4)}</TableCell>
+                                  <TableCell>
+                                    {(result.p_value || result.pValue) > 0.05 ? (
+                                      <div className="flex items-center">
+                                        <CheckCircle2 className="mr-1 h-4 w-4 text-green-500" />
+                                        <span>{result.conclusion}</span>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center">
+                                        <AlertCircle className="mr-1 h-4 w-4 text-amber-500" />
+                                        <span>{result.conclusion}</span>
+                                      </div>
+                                    )}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
+
+                      {/* Mann-Whitney Test Results - учет null в данных */}
+                      {analysisResult?.wilcoxon_tests && (
+                        (analysisResult.wilcoxon_tests?.mann_whitney_results && 
+                         analysisResult.wilcoxon_tests?.mann_whitney_results.length > 0) || 
+                        (analysisResult.wilcoxon_tests?.mannWhitneyResults && 
+                         analysisResult.wilcoxon_tests?.mannWhitneyResults.length > 0)
+                      ) && (
+                        <div>
+                          <h3 className="text-lg font-semibold mb-4">{t("mann_whitney_test")}</h3>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>{t("group_column")}</TableHead>
+                                <TableHead>{t("value_column")}</TableHead>
+                                <TableHead>{t("group1")} / {t("group2")}</TableHead>
+                                <TableHead>{t("group_sizes")}</TableHead>
+                                <TableHead>{t("group_medians")}</TableHead>
+                                <TableHead>{t("statistic")}</TableHead>
+                                <TableHead>{t("p_value")}</TableHead>
+                                <TableHead>{t("conclusion")}</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {/* @ts-ignore - игнорируем проверку типов для разных форматов */}
+                              {(analysisResult.wilcoxon_tests?.mann_whitney_results || 
+                                analysisResult.wilcoxon_tests?.mannWhitneyResults || []).map((result: any, index: number) => (
+                                <TableRow key={`mw-${index}`}>
+                                  <TableCell>{result.group_column || result.groupColumn}</TableCell>
+                                  <TableCell>{result.value_column || result.valueColumn}</TableCell>
+                                  <TableCell>{result.group1} / {result.group2}</TableCell>
+                                  <TableCell>{result.group1_size || result.group1Size} / {result.group2_size || result.group2Size}</TableCell>
+                                  <TableCell>{formatNumber(result.group1_median || result.group1Median, 3)} / {formatNumber(result.group2_median || result.group2Median, 3)}</TableCell>
+                                  <TableCell>{formatNumber(result.statistic, 4)}</TableCell>
+                                  <TableCell>{formatNumber(result.p_value || result.pValue, 4)}</TableCell>
+                                  <TableCell>
+                                    {(result.p_value || result.pValue) > 0.05 ? (
+                                      <div className="flex items-center">
+                                        <CheckCircle2 className="mr-1 h-4 w-4 text-green-500" />
+                                        <span>{result.conclusion}</span>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center">
+                                        <AlertCircle className="mr-1 h-4 w-4 text-amber-500" />
+                                        <span>{result.conclusion}</span>
+                                      </div>
+                                    )}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
+
+                      {/* No Wilcoxon Tests Results - проверяем наличие wilcoxon_tests */}
+                      {(!analysisResult?.wilcoxon_tests ||
+                        ((!analysisResult.wilcoxon_tests?.signed_rank_results || analysisResult.wilcoxon_tests.signed_rank_results.length === 0) && 
+                        (!analysisResult.wilcoxon_tests?.signedRankResults || analysisResult.wilcoxon_tests.signedRankResults.length === 0) && 
+                        (!analysisResult.wilcoxon_tests?.mann_whitney_results || analysisResult.wilcoxon_tests.mann_whitney_results.length === 0) && 
+                        (!analysisResult.wilcoxon_tests?.mannWhitneyResults || analysisResult.wilcoxon_tests.mannWhitneyResults.length === 0))) && (
+                        <div className="text-center py-8">
+                          <p>{t("no_wilcoxon_tests_performed")}</p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              )}
             </Tabs>
           </CardContent>
         </Card>

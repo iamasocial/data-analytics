@@ -315,8 +315,8 @@ def perform_simple_linear_regression(df: pd.DataFrame, dependent_var: str = None
                 
                 coefficients_cf = []
                 param_names_map = {
-                        "Power": ["a", "b"], "Logarithmic": ["a", "b"],
-                        "Quadratic": ["a", "b", "c"], "Trigonometric": ["a", "b", "c", "d"],
+                    "Power": ["a", "b"], "Logarithmic": ["a", "b"],
+                    "Quadratic": ["a", "b", "c"], "Trigonometric": ["a", "b", "c", "d"],
                     "Sigmoid": ["a", "b", "c"],
                     "Linear (curve_fit)": [x_col_name, "const"] 
                 }

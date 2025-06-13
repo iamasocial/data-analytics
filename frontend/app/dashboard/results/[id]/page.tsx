@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useTranslation } from "@/components/language-provider"
 import { DistributionChart } from "@/components/charts/distribution-chart"
 import { TimeSeriesChart } from "@/components/charts/time-series-chart"
-import { Download, RefreshCw, AlertCircle, CheckCircle2 } from "lucide-react"
+import { AlertTriangle, Download, RefreshCw, AlertCircle, CheckCircle2, Trash, Loader2, InfoIcon } from "lucide-react"
 import { RegressionChart } from "@/components/charts/regression-chart";
 import { Label } from "@/components/ui/label";
 import { ResidualsAnalysis } from "@/components/charts/residuals-analysis"
@@ -136,11 +136,29 @@ interface NormalityResultsWrapper {
   results: NormalityTestResultData[];
 }
 
+// Типы для тестов Вилкоксона
+interface WilcoxonSignedRankTestResult {
+  testType: string;
+  variable1: string;
+  variable2: string;
+  statistic: number;
+  pValue: number;
+  conclusion: string;
+  sampleSize: number;
+}
+
+interface WilcoxonTestsData {
+  signedRankResults?: WilcoxonSignedRankTestResult[];
+  // Поддержка snake_case формата имен
+  signed_rank_results?: WilcoxonSignedRankTestResult[];
+}
+
 // Обновляем тип AnalysisResultsMap, чтобы он соответствовал фактическим данным от API
 type AnalysisResultsMap = {
   descriptive_stats?: DescriptiveStatisticsData;
   normality_tests?: NormalityTestsData; // Полная структура с результатами тестов нормальности
   regression_analysis?: RegressionAnalysisData;
+  wilcoxon_tests?: WilcoxonTestsData; // Добавляем поле для тестов Вилкоксона
   processing_log?: string[];
   error?: {
     code: string;
@@ -323,10 +341,32 @@ const AnalysisResultPage: React.FC = () => {
   const { t } = useTranslation()
   const params = useParams()
   const id = params.id as string
+  
   const [results, setResults] = useState<AnalysisResultsMap | null>(null)
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedModelType, setSelectedModelType] = useState<string | undefined>(undefined);
+  const [globalYScaleDomain, setGlobalYScaleDomain] = useState<[number, number] | null>(null);
+  const [globalXScaleDomain, setGlobalXScaleDomain] = useState<[number, number] | null>(null);
+  const [deleting, setDeleting] = useState<boolean>(false);
+  
+  // Мы больше не добавляем тестовые данные принудительно, 
+  // а используем только реальные данные из БД
+  
+  // Общая проверка наличия результатов тестов Вилкоксона - достаточно наличия объекта wilcoxon_tests
+  const hasWilcoxonTests = !!results?.wilcoxon_tests;
+  
+  // Проверяем наличие конкретного типа результатов
+  const hasWilcoxonSignedRank = !!results?.wilcoxon_tests?.signedRankResults?.length || !!results?.wilcoxon_tests?.signed_rank_results?.length;
+  
+  // Удаляем проверку на тест Манна-Уитни
+  
+  // Удаляю отладочные логи
+  
+  // Проверка значения TabsList className
+  // console.log("%c[DEBUG] Grid classes check", "font-weight: bold; color: green;", {
+  //   tabsListClasses: "grid w-full grid-cols-5 mb-4",
+  // });
 
   // Используем checkTokenValidity из модуля auth
 
@@ -413,6 +453,164 @@ const AnalysisResultPage: React.FC = () => {
           } catch (e) {
             console.error("Ошибка при парсинге normality_tests:", e);
           }
+        }
+        
+        // Проверка и преобразование данных тестов Вилкоксона
+        if (analysisData.wilcoxon_tests) {
+          // Удаляю отладочные логи
+          // console.log("Original wilcoxon_tests:", analysisData.wilcoxon_tests);
+          
+          // Проверяем, пришли ли данные как строка JSON
+          if (typeof analysisData.wilcoxon_tests === 'string') {
+            try {
+              // console.log("Raw wilcoxon_tests string:", analysisData.wilcoxon_tests);
+              analysisData.wilcoxon_tests = JSON.parse(analysisData.wilcoxon_tests);
+              // console.log("Parsed wilcoxon_tests from string:", analysisData.wilcoxon_tests);
+            } catch (e) {
+              console.error("Ошибка при парсинге wilcoxon_tests из строки:", e);
+            }
+          }
+          
+          // Дополнительная проверка, если это вложенная строка JSON
+          if (analysisData.wilcoxon_tests?.signed_rank_results && typeof analysisData.wilcoxon_tests.signed_rank_results === 'string') {
+            try {
+              // console.log("Raw signed_rank_results string:", analysisData.wilcoxon_tests.signed_rank_results);
+              analysisData.wilcoxon_tests.signed_rank_results = JSON.parse(analysisData.wilcoxon_tests.signed_rank_results);
+              // console.log("Parsed signed_rank_results:", analysisData.wilcoxon_tests.signed_rank_results);
+            } catch (e) {
+              console.error("Ошибка при парсинге signed_rank_results:", e);
+            }
+          }
+          
+          if (analysisData.wilcoxon_tests?.mann_whitney_results && typeof analysisData.wilcoxon_tests.mann_whitney_results === 'string') {
+            try {
+              // console.log("Raw mann_whitney_results string:", analysisData.wilcoxon_tests.mann_whitney_results);
+              analysisData.wilcoxon_tests.mann_whitney_results = JSON.parse(analysisData.wilcoxon_tests.mann_whitney_results);
+              // console.log("Parsed mann_whitney_results:", analysisData.wilcoxon_tests.mann_whitney_results);
+            } catch (e) {
+              console.error("Ошибка при парсинге mann_whitney_results:", e);
+            }
+          }
+          
+          // Проверка данных для signed_rank_results
+          // console.log("Проверка данных для signed_rank_results:", {
+          //   exists: !!analysisData.wilcoxon_tests?.signed_rank_results, 
+          //   type: typeof analysisData.wilcoxon_tests?.signed_rank_results,
+          //   isArray: Array.isArray(analysisData.wilcoxon_tests?.signed_rank_results),
+          //   length: analysisData.wilcoxon_tests?.signed_rank_results?.length || 0,
+          //   value: analysisData.wilcoxon_tests?.signed_rank_results
+          // });
+          
+          // Проверка данных для signedRankResults (прямая структура из БД)
+          // console.log("Проверка данных для signedRankResults:", {
+          //   exists: !!analysisData.wilcoxon_tests?.signedRankResults, 
+          //   type: typeof analysisData.wilcoxon_tests?.signedRankResults,
+          //   isArray: Array.isArray(analysisData.wilcoxon_tests?.signedRankResults),
+          //   length: analysisData.wilcoxon_tests?.signedRankResults?.length || 0,
+          //   value: analysisData.wilcoxon_tests?.signedRankResults
+          // });
+          
+          // Обработка случая, когда данные уже доступны в формате signedRankResults из БД
+          if (analysisData.wilcoxon_tests?.signedRankResults && 
+              Array.isArray(analysisData.wilcoxon_tests.signedRankResults) && 
+              analysisData.wilcoxon_tests.signedRankResults.length > 0 && 
+              !analysisData.wilcoxon_tests?.signed_rank_results) {
+            // Копируем данные в snake_case формат для совместимости
+            analysisData.wilcoxon_tests.signed_rank_results = analysisData.wilcoxon_tests.signedRankResults;
+            // console.log("Скопированы данные из signedRankResults в signed_rank_results:", 
+            //            analysisData.wilcoxon_tests.signed_rank_results);
+          }
+          
+          // Преобразуем snake_case в camelCase для теста Вилкоксона знаковых рангов
+          if (analysisData.wilcoxon_tests?.signed_rank_results) {
+            try {
+              // Если это массив, преобразуем его элементы
+              if (Array.isArray(analysisData.wilcoxon_tests.signed_rank_results)) {
+                if (analysisData.wilcoxon_tests.signed_rank_results.length > 0) {
+                  // Преобразуем все поля из snake_case в camelCase
+                  analysisData.wilcoxon_tests.signedRankResults = analysisData.wilcoxon_tests.signed_rank_results.map((test: any) => ({
+                    testType: test.test_type || test.testType || "",
+                    variable1: test.variable1 || "",
+                    variable2: test.variable2 || "",
+                    statistic: test.statistic || 0,
+                    pValue: test.p_value || test.pValue || 0,
+                    conclusion: test.conclusion || "",
+                    sampleSize: test.sample_size || test.sampleSize || 0
+                  }));
+                } else {
+                  // Пустой массив, копируем как есть
+                  analysisData.wilcoxon_tests.signedRankResults = [];
+                }
+              } else {
+                // На всякий случай, если это не массив
+                analysisData.wilcoxon_tests.signedRankResults = [];
+              }
+            } catch (e) {
+              console.error("Ошибка при преобразовании signed_rank_results:", e);
+              analysisData.wilcoxon_tests.signedRankResults = [];
+            }
+          } else {
+            analysisData.wilcoxon_tests.signedRankResults = [];
+          }
+          
+          // Преобразуем snake_case в camelCase для теста Манна-Уитни
+          if (analysisData.wilcoxon_tests?.mann_whitney_results) {
+            try {
+              // Если это массив, преобразуем его элементы
+              if (Array.isArray(analysisData.wilcoxon_tests.mann_whitney_results)) {
+                if (analysisData.wilcoxon_tests.mann_whitney_results.length > 0) {
+                  // Преобразуем все поля из snake_case в camelCase
+                  analysisData.wilcoxon_tests.mannWhitneyResults = analysisData.wilcoxon_tests.mann_whitney_results.map((test: any) => ({
+                    testType: test.test_type || test.testType || "",
+                    groupColumn: test.group_column || test.groupColumn || "",
+                    valueColumn: test.value_column || test.valueColumn || "",
+                    group1: test.group1 || "",
+                    group2: test.group2 || "",
+                    group1Size: test.group1_size || test.group1Size || 0,
+                    group2Size: test.group2_size || test.group2Size || 0,
+                    group1Median: test.group1_median || test.group1Median || 0,
+                    group2Median: test.group2_median || test.group2Median || 0,
+                    statistic: test.statistic || 0,
+                    pValue: test.p_value || test.pValue || 0,
+                    conclusion: test.conclusion || ""
+                  }));
+                } else {
+                  // Пустой массив, копируем как есть
+                  analysisData.wilcoxon_tests.mannWhitneyResults = [];
+                }
+              } else {
+                // На всякий случай, если это не массив
+                analysisData.wilcoxon_tests.mannWhitneyResults = [];
+              }
+            } catch (e) {
+              console.error("Ошибка при преобразовании mann_whitney_results:", e);
+              analysisData.wilcoxon_tests.mannWhitneyResults = [];
+            }
+          } else {
+            analysisData.wilcoxon_tests.mannWhitneyResults = [];
+          }
+          
+          // Если wilcoxon_tests в итоге пустой объект (нет ни синейк-кейс ни кэмел-кейс данных)
+          // создаем пустые массивы, но не хардкодим тестовые данные
+          if (!analysisData.wilcoxon_tests.signedRankResults?.length && 
+              !analysisData.wilcoxon_tests.signed_rank_results?.length &&
+              !analysisData.wilcoxon_tests.mannWhitneyResults?.length &&
+              !analysisData.wilcoxon_tests.mann_whitney_results?.length) {
+            console.log("No Wilcoxon test data found, using empty arrays");
+            analysisData.wilcoxon_tests.signedRankResults = [];
+            analysisData.wilcoxon_tests.mannWhitneyResults = [];
+          }
+          
+          console.log("Processed wilcoxon_tests:", analysisData.wilcoxon_tests);
+        } else {
+          // Создаем пустой объект для wilcoxon_tests, если его нет
+          analysisData.wilcoxon_tests = {
+            signed_rank_results: [],
+            mann_whitney_results: [],
+            signedRankResults: [],
+            mannWhitneyResults: []
+          };
+          console.log("Created empty wilcoxon_tests object");
         }
         
         // Проверяем, есть ли еще поля в виде строк JSON
@@ -817,11 +1015,191 @@ const AnalysisResultPage: React.FC = () => {
     );
   };
 
+  // Функция рендеринга результатов теста знаковых рангов Вилкоксона
+  const renderWilcoxonSignedRankTable = (testResults: WilcoxonSignedRankTestResult[] | undefined) => {
+    // Проверка на наличие данных, но предотвращение null/undefined
+    const results = testResults || [];
+    
+    // Вывод отладочной информации
+    // console.log("Rendering Wilcoxon Signed Rank table with data:", results);
+
+    // Проверка, есть ли хотя бы один реальный объект данных с требуемыми свойствами
+    const validResults = results.filter(result => 
+      result && 
+      typeof result === 'object' && 
+      ('variable1' in result || 'variable2' in result || 'statistic' in result)
+    );
+    
+    if (validResults.length === 0) {
+      return (
+        <div className="p-6 text-center border rounded-md">
+          <div className="flex justify-center">
+            <InfoIcon className="h-10 w-10 text-gray-500 mb-3" />
+          </div>
+          <p className="text-gray-700 font-medium">{t('no_wilcoxon_signed_rank_results')}</p>
+          <p className="text-sm text-gray-600 mt-2">
+            Тест требует минимум 6 значений без пропусков. Проверьте требования к данным и убедитесь, что тест выбран в параметрах анализа.
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>{t('variable1')}</TableHead>
+            <TableHead>{t('variable2')}</TableHead>
+            <TableHead>{t('sample_size')}</TableHead>
+            <TableHead>{t('statistic')}</TableHead>
+            <TableHead>{t('p_value')}</TableHead>
+            <TableHead>{t('conclusion')}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {validResults.map((result, index) => (
+            <TableRow key={index}>
+              <TableCell>{result.variable1}</TableCell>
+              <TableCell>{result.variable2}</TableCell>
+              <TableCell>{result.sampleSize}</TableCell>
+              <TableCell>{formatNumber(result.statistic, 4)}</TableCell>
+              <TableCell>{formatNumber(result.pValue, 4, true)}</TableCell>
+              <TableCell>
+                {result.pValue > 0.05 ? (
+                  <div className="flex items-center">
+                    <CheckCircle2 className="mr-1 h-4 w-4 text-green-500" />
+                    <span>{result.conclusion}</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center">
+                    <AlertCircle className="mr-1 h-4 w-4 text-amber-500" />
+                    <span>{result.conclusion}</span>
+                  </div>
+                )}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    );
+  };
+
+  // Функция рендеринга вкладки с тестами Вилкоксона с обработкой ошибок
+  const renderWilcoxonTabContent = () => {
+    try {
+      // Преобразование данных для совместимости, если нужно
+      let signedRankData = results?.wilcoxon_tests?.signedRankResults || results?.wilcoxon_tests?.signed_rank_results;
+      
+      return (
+        <div className="space-y-6">
+          {/* Тест знаковых рангов Вилкоксона */}
+          <Card className="overflow-hidden">
+            <CardHeader>
+              <CardTitle>{t('wilcoxon_signed_rank_test')}</CardTitle>
+              <CardDescription>{t('wilcoxon_signed_rank_description')}</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-auto max-h-[500px]">
+                {renderWilcoxonSignedRankTable(signedRankData)}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Тест Манна-Уитни - удален */}
+
+          {/* Показываем сообщение только если нет данных по тестам Вилкоксона */}
+          {hasWilcoxonTests && 
+           !hasWilcoxonSignedRank && (
+            <div className="flex flex-col items-center justify-center py-12">
+              <div className="bg-blue-50 border border-blue-300 rounded-md p-4 text-center">
+                <p className="text-blue-700 font-medium">{t('no_wilcoxon_tests_performed')}</p>
+                <p className="text-sm text-blue-600 mt-2">
+                  Тесты Вилкоксона были выбраны при анализе, но подходящих данных для тестов не найдено.
+                  Проверьте требования и формат ваших данных.
+                </p>
+              </div>
+            </div>
+          )}
+          
+          {/* Показываем сообщение если wilcoxon_tests полностью отсутствует */}
+          {!hasWilcoxonTests && (
+            <div className="flex flex-col items-center justify-center py-12">
+              <div className="bg-blue-50 border border-blue-300 rounded-md p-4 text-center">
+                <p className="text-blue-700 font-medium">{t('no_wilcoxon_tests_performed')}</p>
+                <p className="text-sm text-blue-600 mt-2">
+                  Тесты Вилкоксона не были выбраны при анализе данных.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    } catch (error) {
+      console.error("Ошибка при отображении тестов Вилкоксона:", error);
+      return (
+        <div className="p-4 border border-red-500 bg-red-50 rounded-md">
+          <h3 className="font-medium text-red-600 mb-2">Ошибка при отображении результатов</h3>
+          <p>{error instanceof Error ? error.message : "Неизвестная ошибка"}</p>
+          <p className="mt-2 text-sm">Проверьте консоль разработчика для деталей.</p>
+        </div>
+      );
+    }
+  };
+
+  // Отладочный вывод доступных вкладок
+  console.log("%c[DEBUG] Available tabs:", "font-weight: bold; color: purple;", {
+    descriptive_stats: !!results.descriptive_stats,
+    hasNormalityTests,
+    hasWilcoxonTests,
+    regression_analysis: !!results.regression_analysis,
+    processing_log: !!(results.processing_log && results.processing_log.length > 0),
+    defaultTabValue: 
+      results.descriptive_stats ? "desc_stats" : 
+      hasNormalityTests ? "norm_tests" :
+      hasWilcoxonTests ? "wilcoxon" :
+      results.regression_analysis ? "reg_analysis" : "logs"
+  });
+  
+  const handleDeleteAnalysis = async () => {
+    setDeleting(true);
+    try {
+      const response = await fetch(`http://localhost:8080/api/analyses/history/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+        }
+      });
+      if (response.ok) {
+        clearAuthTokens();
+        window.location.href = '/dashboard/analyses';
+      } else {
+        console.error('Ошибка при удалении анализа:', response.statusText);
+        setError('Произошла ошибка при удалении анализа');
+      }
+    } catch (error) {
+      console.error('Ошибка при удалении анализа:', error);
+      setError('Произошла ошибка при удалении анализа');
+    } finally {
+      setDeleting(false);
+    }
+  };
+  
   return (
     <div className="container mx-auto p-4">
-      <Card className="mb-6">
+      <Card>
         <CardHeader>
-          <CardTitle>Результаты Анализа (ID: {id})</CardTitle>
+          <CardTitle className="flex justify-between">
+            Результаты Анализа (ID: {id})
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDeleteAnalysis}
+              className="ml-auto"
+            >
+              <Trash className="h-4 w-4 mr-2" />
+              Удалить
+            </Button>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {results.error && (
@@ -847,14 +1225,27 @@ const AnalysisResultPage: React.FC = () => {
               </CardContent>
             </Card>
           )}
+          
           <Tabs defaultValue={
             results.descriptive_stats ? "desc_stats" : 
             hasNormalityTests ? "norm_tests" :
+            hasWilcoxonTests ? "wilcoxon" :
             results.regression_analysis ? "reg_analysis" : "logs"
           } className="w-full">
-            <TabsList className="grid w-full grid-cols-3 mb-4">
+            {/* ВАЖНО: grid-cols-n должно соответствовать количеству видимых вкладок */}
+            <TabsList className={`grid w-full mb-4 ${
+              [
+                results.descriptive_stats, 
+                hasNormalityTests, 
+                hasWilcoxonTests, 
+                results.regression_analysis, 
+                results.processing_log && results.processing_log.length > 0
+              ].filter(Boolean).length <= 3 ? 'grid-cols-3' : 'grid-cols-5'
+            }`}>
               {results.descriptive_stats && <TabsTrigger value="desc_stats">Описательная статистика</TabsTrigger>}
               {hasNormalityTests && <TabsTrigger value="norm_tests">Проверка нормальности</TabsTrigger>}
+              {/* Принудительное отображение вкладки тестов Вилкоксона для отладки */}
+              <TabsTrigger value="wilcoxon">Тесты Вилкоксона</TabsTrigger>
               {results.regression_analysis && <TabsTrigger value="reg_analysis">Модели регрессии</TabsTrigger>}
               {results.processing_log && results.processing_log.length > 0 && <TabsTrigger value="logs">Лог обработки</TabsTrigger>}
             </TabsList>
@@ -1187,6 +1578,17 @@ const AnalysisResultPage: React.FC = () => {
                 </Card>
               </TabsContent>
             )}
+
+            {/* Wilcoxon Tests Tab Content - всегда отображаем для отладки */}
+            <TabsContent value="wilcoxon">
+              <Card>
+                <CardHeader><CardTitle>Тесты Вилкоксона</CardTitle></CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Отладочная информация о расчетах тестов Вилкоксона - УДАЛЕНА */}
+                  {renderWilcoxonTabContent()}
+                </CardContent>
+              </Card>
+            </TabsContent>
 
             {results.processing_log && results.processing_log.length > 0 && (
               <TabsContent value="logs">

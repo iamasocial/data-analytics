@@ -92,13 +92,68 @@ class RegressionResult:
     residuals: List[float] = field(default_factory=list)  # Остатки регрессии
     residuals_analysis: Dict[str, Any] = field(default_factory=dict)  # Результаты анализа остатков
 
+# Класс WilcoxonTestResult переносим выше класса AnalysisResponse
+class WilcoxonTestResult:
+    """
+    Результат теста знаковых рангов Вилкоксона для связанных выборок.
+    """
+    def __init__(self, 
+                test_type: str = "Wilcoxon signed-rank test",
+                variable1: str = "",
+                variable2: str = "",
+                statistic: float = 0.0,
+                p_value: float = 0.0,
+                conclusion: str = "",
+                sample_size: int = 0):
+        self.test_type = test_type
+        self.variable1 = variable1
+        self.variable2 = variable2
+        self.statistic = statistic
+        self.p_value = p_value
+        self.conclusion = conclusion
+        self.sample_size = sample_size
+
+
+class MannWhitneyTestResult:
+    """
+    Результат теста Манна-Уитни (критерий суммы рангов Вилкоксона) для независимых выборок.
+    """
+    def __init__(self,
+                test_type: str = "Mann-Whitney U test",
+                group_column: str = "",
+                value_column: str = "",
+                group1: str = "",
+                group2: str = "",
+                group1_size: int = 0,
+                group2_size: int = 0,
+                group1_median: float = 0.0,
+                group2_median: float = 0.0,
+                statistic: float = 0.0,
+                p_value: float = 0.0,
+                conclusion: str = ""):
+        self.test_type = test_type
+        self.group_column = group_column
+        self.value_column = value_column
+        self.group1 = group1
+        self.group2 = group2
+        self.group1_size = group1_size
+        self.group2_size = group2_size
+        self.group1_median = group1_median
+        self.group2_median = group2_median
+        self.statistic = statistic
+        self.p_value = p_value
+        self.conclusion = conclusion
+
 @dataclass
 class AnalysisResponse:
-    """Полный ответ с результатами анализа"""
-    processing_log: List[str] = field(default_factory=list)
+    """Ответ с результатами анализа данных"""
     descriptives: List[DescriptiveStats] = field(default_factory=list)
     histograms: List[HistogramData] = field(default_factory=list)
     normality_tests: List[NormalityTestResult] = field(default_factory=list)
     confidence_intervals: List[ConfidenceInterval] = field(default_factory=list)
     pearson_chi_square_results: List[PearsonChiSquareResult] = field(default_factory=list)
-    regressions: List[RegressionResult] = field(default_factory=list) 
+    regressions: List[RegressionResult] = field(default_factory=list)
+    wilcoxon_signed_rank_tests: List[WilcoxonTestResult] = field(default_factory=list)
+    mann_whitney_tests: List[MannWhitneyTestResult] = field(default_factory=list)
+    processing_log: List[str] = field(default_factory=list)
+    error: Optional[str] = None 

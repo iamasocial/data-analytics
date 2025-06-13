@@ -21,6 +21,8 @@ message AnalyzeDataResponse {
     RegressionAnalysisResponse regression_analysis = 3;
     repeated string processing_log = 4;
     ErrorDetails error = 5;
+    // Добавляем результаты тестов Вилкоксона 
+    WilcoxonTestsResponse wilcoxon_tests = 6;
 }
 
 // Ошибка, которая может возникнуть при анализе данных
@@ -93,6 +95,39 @@ message PearsonChiSquareResult {
     int32 degrees_of_freedom = 4;
     int32 intervals = 5;      // Добавлено: количество интервалов
     bool is_normal = 6;       // Добавлено: вывод теста
+}
+
+// ------------------ Критерии Вилкоксона ------------------
+message WilcoxonTestsResponse {
+    repeated WilcoxonSignedRankTestResult signed_rank_results = 1;
+    repeated MannWhitneyTestResult mann_whitney_results = 2;
+}
+
+// Результаты критерия знаковых рангов Вилкоксона
+message WilcoxonSignedRankTestResult {
+    string test_type = 1;      // например, "Wilcoxon signed-rank test"
+    string variable1 = 2;      // первая переменная
+    string variable2 = 3;      // вторая переменная
+    double statistic = 4;      // значение W-статистики
+    double p_value = 5;        // p-значение
+    string conclusion = 6;     // вывод по результатам теста
+    int32 sample_size = 7;     // размер выборки
+}
+
+// Результаты критерия Манна-Уитни (U-тест, критерий суммы рангов Вилкоксона)
+message MannWhitneyTestResult {
+    string test_type = 1;      // например, "Mann-Whitney U test"
+    string group_column = 2;   // группировочная переменная
+    string value_column = 3;   // тестируемая переменная
+    string group1 = 4;         // название первой группы
+    string group2 = 5;         // название второй группы
+    int32 group1_size = 6;     // размер первой группы
+    int32 group2_size = 7;     // размер второй группы
+    double group1_median = 8;  // медиана первой группы
+    double group2_median = 9;  // медиана второй группы
+    double statistic = 10;     // значение U-статистики
+    double p_value = 11;       // p-значение
+    string conclusion = 12;    // вывод по результатам теста
 }
 
 // ------------------ Регрессионный анализ ------------------
