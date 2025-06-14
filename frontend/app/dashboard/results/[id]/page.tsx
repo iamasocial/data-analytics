@@ -715,42 +715,28 @@ const AnalysisResultPage: React.FC = () => {
       results.regression_analysis.models || []
     ) : undefined;
 
-  // Исправляем создание пропсов для RegressionChart с поддержкой camelCase полей и добавляем анализ остатков
+  // Создаем пропсы для RegressionChart, выбирая текущую модель
   const regressionChartProps: RegressionChartProps | undefined = 
     currentRegressionModel && 
     results?.regression_analysis ? {
       data: results.regression_analysis.data_points || 
             results.regression_analysis.dataPoints || [],
       models: [{
-        type: currentRegressionModel.regressionType || currentRegressionModel.regression_type || "",
+        type: currentRegressionModel.regression_type || currentRegressionModel.regressionType || "",
         coefficients: currentRegressionModel.coefficients || [],
-        r_squared: currentRegressionModel.rSquared || currentRegressionModel.r_squared || 0,
-        residuals: currentRegressionModel.residuals || [],
-        // Передаем данные анализа остатков, если они есть, без проверки всех полей
-        ...(currentRegressionModel.residuals_analysis ? {
-            residuals_analysis: {
-              ...(currentRegressionModel.residuals_analysis.shapiro_test && {
-                shapiro_test: currentRegressionModel.residuals_analysis.shapiro_test
-              }),
-              ...(currentRegressionModel.residuals_analysis.histogram && {
-                histogram: currentRegressionModel.residuals_analysis.histogram
-              }),
-              ...(currentRegressionModel.residuals_analysis.qq_plot && {
-                qq_plot: currentRegressionModel.residuals_analysis.qq_plot
-              })
-            }
-          } : {})
+        r_squared: currentRegressionModel.r_squared || currentRegressionModel.rSquared || 0,
+        residuals: currentRegressionModel.residuals || []
+        // Удаляем передачу residuals_analysis и отладочного кода из RegressionChartProps
       }],
       dependentVar: results.regression_analysis.dependent_variable || 
-                   results.regression_analysis.dependentVariable || "y",
+                   results.regression_analysis.dependentVariable || "Y",
       independentVar: (results.regression_analysis.independent_variables && 
                       results.regression_analysis.independent_variables.length > 0) ? 
                       results.regression_analysis.independent_variables[0] : 
                       (results.regression_analysis.independentVariables && 
                       results.regression_analysis.independentVariables.length > 0) ?
-                      results.regression_analysis.independentVariables[0] : "x",
-      height: 500, // Увеличиваем высоту графика для лучшего отображения
-      // Передаем глобальный домен для оси Y, чтобы все графики имели одинаковый масштаб
+                      results.regression_analysis.independentVariables[0] : "X",
+      height: 500,
       globalYDomain: globalYDomain
     } : undefined;
 
@@ -898,6 +884,26 @@ const AnalysisResultPage: React.FC = () => {
               // Поддержка как snake_case, так и camelCase вариантов полей
               const residualsAnalysis = currentModel.residuals_analysis || (currentModel as any).residualsAnalysis;
               
+              // Отладочный вывод исходных данных модели
+              console.log("ResidualsAnalysis source model data:", {
+                modelType,
+                residuals: currentModel.residuals?.length || 0,
+                hasResidualsAnalysis: !!residualsAnalysis,
+                residualsAnalysisFields: residualsAnalysis ? Object.keys(residualsAnalysis) : [],
+                f_statistic: currentModel.f_statistic,
+                fStatistic: currentModel.fStatistic,
+                prob_f_statistic: currentModel.prob_f_statistic,
+                probFStatistic: currentModel.probFStatistic
+              });
+              
+              // Проверка данных анализа остатков
+              if (!residualsAnalysis) {
+                console.warn("No residuals analysis data for model:", modelType);
+                return <div className="p-4 border rounded bg-yellow-50">
+                  <p className="text-yellow-700">Анализ остатков недоступен для данной модели</p>
+                </div>;
+              }
+              
               // Извлекаем shapiroTest
               const shapiroTest = residualsAnalysis?.shapiro_test || residualsAnalysis?.shapiroTest;
               
@@ -907,11 +913,28 @@ const AnalysisResultPage: React.FC = () => {
               // Извлекаем qqPlot 
               const qqPlot = residualsAnalysis?.qq_plot || residualsAnalysis?.qqPlot;
               
+              // Проверка компонентов анализа остатков
+              if (!shapiroTest && !histogram && !qqPlot) {
+                console.warn("All residuals analysis components are missing:", residualsAnalysis);
+                return <div className="p-4 border rounded bg-yellow-50">
+                  <p className="text-yellow-700">Компоненты анализа остатков отсутствуют в данных</p>
+                </div>;
+              }
+              
               // Преобразуем qqPlot в нужный формат, если он существует
               const formattedQqPlot = qqPlot ? {
                 theoretical_quantiles: qqPlot.theoretical_quantiles || qqPlot.theoreticalQuantiles,
                 sample_quantiles: qqPlot.sample_quantiles || qqPlot.sampleQuantiles
               } : undefined;
+              
+              // Отладочный вывод для анализа остатков
+              console.log("ResidualsAnalysis component data:", {
+                shapiroTest,
+                histogram,
+                qqPlot: formattedQqPlot,
+                fStatistic: currentModel.f_statistic || currentModel.fStatistic,
+                fPValue: currentModel.prob_f_statistic || currentModel.probFStatistic
+              });
               
               return (
                 <ResidualsAnalysis 

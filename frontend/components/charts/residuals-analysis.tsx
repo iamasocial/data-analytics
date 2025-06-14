@@ -54,15 +54,23 @@ export function ResidualsAnalysis({
   const qqPlotRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
+    console.log("PROPS RECEIVED BY ResidualsAnalysis component:", {
+      residuals, 
+      shapiroTest, 
+      histogram, 
+      qqPlot
+    });
     setIsMounted(true);
   }, []);
 
+  // Нормализуем данные теста Шапиро-Уилка, с улучшенной обработкой данных
   const normalizedShapiroTest = shapiroTest ? {
     statistic: shapiroTest.statistic,
     p_value: shapiroTest.p_value || shapiroTest.pValue || 0,
     is_normal: shapiroTest.is_normal || shapiroTest.isNormal || false
   } : undefined;
 
+  // Нормализуем данные QQ-Plot, с улучшенной обработкой данных
   const normalizedQQPlot = qqPlot ? {
     theoretical_quantiles: qqPlot.theoretical_quantiles || qqPlot.theoreticalQuantiles || [],
     sample_quantiles: qqPlot.sample_quantiles || qqPlot.sampleQuantiles || []
@@ -74,22 +82,55 @@ export function ResidualsAnalysis({
     console.log("ResidualsAnalysis useEffect", {
       isMounted,
       residualsLength: residuals?.length || 0,
-      normalizedShapiroTest,
-      histogram,
-      normalizedQQPlot
+      hasShapiroTest: !!normalizedShapiroTest,
+      shapiroTestDetails: normalizedShapiroTest ? {
+        statistic: normalizedShapiroTest.statistic,
+        p_value: normalizedShapiroTest.p_value,
+        is_normal: normalizedShapiroTest.is_normal
+      } : null,
+      hasHistogram: !!(histogram?.bins?.length && histogram?.frequencies?.length),
+      histogramDetails: histogram ? {
+        binsLength: histogram.bins?.length || 0,
+        frequenciesLength: histogram.frequencies?.length || 0
+      } : null,
+      hasQQPlot: !!(normalizedQQPlot?.theoretical_quantiles?.length && normalizedQQPlot?.sample_quantiles?.length),
+      qqPlotDetails: normalizedQQPlot ? {
+        theoreticalQuantilesLength: normalizedQQPlot.theoretical_quantiles?.length || 0,
+        sampleQuantilesLength: normalizedQQPlot.sample_quantiles?.length || 0
+      } : null
     });
     
+    // Проверка для гистограммы
     if (histogram && histogram.bins && histogram.bins.length > 0 && 
         histogram.frequencies && histogram.frequencies.length > 0 && 
         histogramRef.current) {
       renderHistogram();
+    } else {
+      console.warn("Cannot render histogram due to missing or invalid data", { 
+        histogram, 
+        hasBins: !!histogram?.bins, 
+        binsLength: histogram?.bins?.length || 0,
+        hasFrequencies: !!histogram?.frequencies,
+        frequenciesLength: histogram?.frequencies?.length || 0,
+        hasRef: !!histogramRef.current
+      });
     }
     
+    // Проверка для QQ-графика
     if (normalizedQQPlot && 
         normalizedQQPlot.theoretical_quantiles && normalizedQQPlot.theoretical_quantiles.length > 0 && 
         normalizedQQPlot.sample_quantiles && normalizedQQPlot.sample_quantiles.length > 0 && 
         qqPlotRef.current) {
       renderQQPlot();
+    } else {
+      console.warn("Cannot render QQ-plot due to missing or invalid data", {
+        normalizedQQPlot,
+        hasTheoreticalQuantiles: !!normalizedQQPlot?.theoretical_quantiles,
+        theoreticalQuantilesLength: normalizedQQPlot?.theoretical_quantiles?.length || 0,
+        hasSampleQuantiles: !!normalizedQQPlot?.sample_quantiles,
+        sampleQuantilesLength: normalizedQQPlot?.sample_quantiles?.length || 0,
+        hasRef: !!qqPlotRef.current
+      });
     }
   }, [isMounted, residuals, histogram, normalizedQQPlot]);
 
@@ -294,7 +335,7 @@ export function ResidualsAnalysis({
               <div className="mb-6 p-4 border rounded-md">
                 <h4 className="text-lg font-medium mb-2">Тест Шапиро-Уилка</h4>
                 <p className="text-sm mb-1">Статистика: {normalizedShapiroTest.statistic.toFixed(4)}</p>
-                <p className="text-sm mb-1">p-значение: {normalizedShapiroTest.p_value.toExponential(10)}</p>
+                <p className="text-sm mb-1">p-значение: {normalizedShapiroTest.p_value.toPrecision(4)}</p>
                 <p className="text-sm font-semibold">
                   Вывод: {normalizedShapiroTest.is_normal 
                     ? "Остатки имеют нормальное распределение (p > 0.05)" 

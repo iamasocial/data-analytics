@@ -111,8 +111,11 @@ def generate_qq_plot_data(residuals: List[float]) -> Dict[str, Any]:
         # Сортировка остатков
         sorted_residuals = np.sort(residuals)
         
-        # Вычисление теоретических квантилей нормального распределения
-        theoretical_quantiles = stats.norm.ppf(np.linspace(0.01, 0.99, len(residuals)))
+        # Вычисление теоретических квантилей
+        n = len(sorted_residuals)
+        # Используем формулу (i-0.5)/n для вычисления вероятностей
+        probabilities = (np.arange(n) + 0.5) / n
+        theoretical_quantiles = stats.norm.ppf(probabilities)
         
         return {
             "theoretical_quantiles": theoretical_quantiles.tolist(),

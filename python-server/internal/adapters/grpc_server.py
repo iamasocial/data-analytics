@@ -285,46 +285,35 @@ class AnalysisServiceGrpcAdapter(analysis_pb2_grpc.AnalysisServiceServicer):
                     
                     # Добавляем анализ остатков, если он есть
                     if hasattr(reg_domain_data, 'residuals_analysis') and reg_domain_data.residuals_analysis:
-                        residuals_analysis = analysis_pb2.ResidualsAnalysisResult()
-                        
-                        # Добавляем результат теста Шапиро-Уилка
-                        if 'shapiro_test' in reg_domain_data.residuals_analysis:
-                            shapiro_result = reg_domain_data.residuals_analysis['shapiro_test']
+                        residuals_analysis_data = reg_domain_data.residuals_analysis
+                        residuals_analysis_msg = analysis_pb2.ResidualsAnalysisResult()
+
+                        # Тест Шапиро-Уилка
+                        if 'shapiro_test' in residuals_analysis_data:
+                            shapiro_data = residuals_analysis_data['shapiro_test']
                             shapiro_msg = analysis_pb2.NormalityTestResult()
-                            shapiro_msg.column_name = "residuals"
-                            shapiro_msg.test_name = shapiro_result.get('test_name', 'Shapiro-Wilk')
-                            shapiro_msg.statistic = shapiro_result.get('statistic', 0.0)
-                            shapiro_msg.p_value = shapiro_result.get('p_value', 0.0)
-                            shapiro_msg.is_normal = shapiro_result.get('is_normal', False)
-                            residuals_analysis.shapiro_test.CopyFrom(shapiro_msg)
-                            
-                            # Добавляем отладочную информацию
-                            grpc_response.processing_log.append(f"DEBUG: Added Shapiro-Wilk test for residuals, statistic={shapiro_msg.statistic}, p-value={shapiro_msg.p_value}")
-                        
-                        # Добавляем данные гистограммы
-                        if 'histogram' in reg_domain_data.residuals_analysis:
-                            hist_data = reg_domain_data.residuals_analysis['histogram']
+                            shapiro_msg.statistic = shapiro_data.get('statistic', 0.0)
+                            shapiro_msg.p_value = shapiro_data.get('p_value', 0.0)
+                            shapiro_msg.is_normal = shapiro_data.get('is_normal', False)
+                            residuals_analysis_msg.shapiro_test.CopyFrom(shapiro_msg)
+
+                        # Гистограмма
+                        if 'histogram' in residuals_analysis_data:
+                            hist_data = residuals_analysis_data['histogram']
                             hist_msg = analysis_pb2.HistogramData()
-                            hist_msg.column_name = "residuals"
                             hist_msg.bins.extend(hist_data.get('bins', []))
                             hist_msg.frequencies.extend(hist_data.get('frequencies', []))
-                            residuals_analysis.histogram.CopyFrom(hist_msg)
-                            
-                            # Добавляем отладочную информацию
-                            grpc_response.processing_log.append(f"DEBUG: Added histogram for residuals, bins count={len(hist_msg.bins)}, frequencies count={len(hist_msg.frequencies)}")
-                        
-                        # Добавляем данные QQ-графика
-                        if 'qq_plot' in reg_domain_data.residuals_analysis:
-                            qq_data = reg_domain_data.residuals_analysis['qq_plot']
+                            residuals_analysis_msg.histogram.CopyFrom(hist_msg)
+
+                        # QQ-график
+                        if 'qq_plot' in residuals_analysis_data:
+                            qq_data = residuals_analysis_data['qq_plot']
                             qq_msg = analysis_pb2.QQPlotData()
                             qq_msg.theoretical_quantiles.extend(qq_data.get('theoretical_quantiles', []))
                             qq_msg.sample_quantiles.extend(qq_data.get('sample_quantiles', []))
-                            residuals_analysis.qq_plot.CopyFrom(qq_msg)
-                            
-                            # Добавляем отладочную информацию
-                            grpc_response.processing_log.append(f"DEBUG: Added QQ-plot for residuals, theoretical quantiles count={len(qq_msg.theoretical_quantiles)}, sample quantiles count={len(qq_msg.sample_quantiles)}")
+                            residuals_analysis_msg.qq_plot.CopyFrom(qq_msg)
                         
-                        model.residuals_analysis.CopyFrom(residuals_analysis)
+                        model.residuals_analysis.CopyFrom(residuals_analysis_msg)
                     
                     # Add coefficients
                     for coef_domain in reg_domain_data.coefficients:
@@ -347,7 +336,7 @@ class AnalysisServiceGrpcAdapter(analysis_pb2_grpc.AnalysisServiceServicer):
                         
                         model.coefficients.append(coef_msg)
                     
-                    # Add the model to the response
+                    # Append the complete model message
                     reg_analysis_response.models.append(model)
                 
                 # Add the regression analysis to the main response
@@ -541,35 +530,36 @@ class AnalysisServiceGrpcAdapter(analysis_pb2_grpc.AnalysisServiceServicer):
                     reg_model.residuals.extend(reg.residuals)
 
                 # Анализ остатков
-                if hasattr(reg, 'residuals_normality') and reg.residuals_normality:
-                    residuals_analysis = analysis_pb2.ResidualsAnalysisResult()
-                    
+                if hasattr(reg, 'residuals_analysis') and reg.residuals_analysis:
+                    residuals_analysis_data = reg.residuals_analysis
+                    residuals_analysis_msg = analysis_pb2.ResidualsAnalysisResult()
+
+                    # Тест Шапиро-Уилка
+                    if 'shapiro_test' in residuals_analysis_data:
+                        shapiro_data = residuals_analysis_data['shapiro_test']
+                        shapiro_msg = analysis_pb2.NormalityTestResult()
+                        shapiro_msg.statistic = shapiro_data.get('statistic', 0.0)
+                        shapiro_msg.p_value = shapiro_data.get('p_value', 0.0)
+                        shapiro_msg.is_normal = shapiro_data.get('is_normal', False)
+                        residuals_analysis_msg.shapiro_test.CopyFrom(shapiro_msg)
+
+                    # Гистограмма
+                    if 'histogram' in residuals_analysis_data:
+                        hist_data = residuals_analysis_data['histogram']
+                        hist_msg = analysis_pb2.HistogramData()
+                        hist_msg.bins.extend(hist_data.get('bins', []))
+                        hist_msg.frequencies.extend(hist_data.get('frequencies', []))
+                        residuals_analysis_msg.histogram.CopyFrom(hist_msg)
+
                     # QQ-график
-                    if hasattr(reg, 'qq_plot') and reg.qq_plot:
-                        qq_plot = analysis_pb2.QQPlotData()
-                        qq_plot.theoretical_quantiles.extend(reg.qq_plot.theoretical_quantiles)
-                        qq_plot.sample_quantiles.extend(reg.qq_plot.sample_quantiles)
-                        residuals_analysis.qq_plot.CopyFrom(qq_plot)
+                    if 'qq_plot' in residuals_analysis_data:
+                        qq_data = residuals_analysis_data['qq_plot']
+                        qq_msg = analysis_pb2.QQPlotData()
+                        qq_msg.theoretical_quantiles.extend(qq_data.get('theoretical_quantiles', []))
+                        qq_msg.sample_quantiles.extend(qq_data.get('sample_quantiles', []))
+                        residuals_analysis_msg.qq_plot.CopyFrom(qq_msg)
                     
-                    # Гистограмма остатков
-                    if hasattr(reg, 'residuals_histogram') and reg.residuals_histogram:
-                        res_hist = analysis_pb2.HistogramData()
-                        res_hist.column_name = "Residuals"
-                        res_hist.bins.extend(reg.residuals_histogram.bins)
-                        res_hist.frequencies.extend(reg.residuals_histogram.frequencies)
-                        residuals_analysis.histogram.CopyFrom(res_hist)
-                    
-                    # Тест Шапиро-Уилка для остатков
-                    if hasattr(reg, 'residuals_normality'):
-                        norm_test = analysis_pb2.NormalityTestResult()
-                        norm_test.column_name = "Residuals"
-                        norm_test.test_name = reg.residuals_normality.test_name
-                        norm_test.statistic = reg.residuals_normality.statistic
-                        norm_test.p_value = reg.residuals_normality.p_value
-                        norm_test.is_normal = reg.residuals_normality.is_normal
-                        residuals_analysis.shapiro_test.CopyFrom(norm_test)
-                        
-                    reg_model.residuals_analysis.CopyFrom(residuals_analysis)
+                    reg_model.residuals_analysis.CopyFrom(residuals_analysis_msg)
 
                 regression_response.models.append(reg_model)
                 

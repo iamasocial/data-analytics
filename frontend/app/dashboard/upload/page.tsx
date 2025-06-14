@@ -15,6 +15,7 @@ import { DistributionChart } from "@/components/charts/distribution-chart"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { RegressionChart, calculateY } from "@/components/charts/regression-chart"
+import { ResidualsAnalysis } from "@/components/charts/residuals-analysis"
 
 // Helper function to format numbers, handling potential non-numeric modes
 function formatNumber(value: number | string | null | undefined, decimals = 3): string {
@@ -1465,6 +1466,19 @@ export default function UploadPage() {
                                 independentVar={regressionAnalysis.independent_variables[0] || "x"}
                                                   globalYDomain={globalYDomain}
                                                 />
+                      </div>
+                    )}
+
+                    {/* --- Residuals Analysis Section --- */}
+                    {modelForDisplay?.residuals_analysis && (
+                      <div className="mt-6 w-full border rounded-lg p-2 md:p-4 bg-white shadow-sm">
+                        <ResidualsAnalysis
+                            residuals={modelForDisplay.residuals || []}
+                            shapiroTest={modelForDisplay.residuals_analysis.shapiro_test}
+                            histogram={modelForDisplay.residuals_analysis.histogram}
+                            qqPlot={modelForDisplay.residuals_analysis.qq_plot}
+                            title={`Анализ остатков регрессии (${regressionTypeTranslations[modelForDisplay.regression_type] || modelForDisplay.regression_type})`}
+                          />
                       </div>
                     )}
 

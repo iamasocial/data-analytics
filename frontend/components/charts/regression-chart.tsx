@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react"
 import * as d3 from "d3"
-import { ResidualsAnalysis, RegressionCoefficient as ResAnalysisCoefficient } from "./residuals-analysis"
 
 interface DataPoint {
   x: number;
@@ -386,41 +385,14 @@ export function RegressionChart({ data, models, dependentVar, independentVar, he
     };
   }, [isMounted, data, models, height, globalYDomain, globalXDomain]);
 
-  // Найти модель с остатками для анализа
-  const modelWithResiduals = models.find(model => model.residuals && model.residuals.length > 0 && model.residuals_analysis);
-  
-  // Найти текущую выбранную модель (даже если нет анализа остатков)
+  // Находим текущую выбранную модель
   const currentModel = models.length > 0 ? models[0] : null;
 
   return (
     <div ref={containerRef} className="w-full overflow-x-auto">
       <svg ref={svgRef} className="w-full" height={height}></svg>
       
-      {/* Отображение анализа остатков, если они есть */}
-      {modelWithResiduals && modelWithResiduals.residuals && modelWithResiduals.residuals_analysis && (
-        <div className="mt-8">
-          <ResidualsAnalysis 
-            residuals={modelWithResiduals.residuals}
-            shapiroTest={modelWithResiduals.residuals_analysis.shapiro_test}
-            histogram={modelWithResiduals.residuals_analysis.histogram}
-            qqPlot={modelWithResiduals.residuals_analysis.qq_plot}
-            title={`Анализ остатков регрессии (${modelWithResiduals.type})`}
-            fStatistic={modelWithResiduals.f_statistic}
-            fPValue={modelWithResiduals.prob_f_statistic}
-            coefficients={modelWithResiduals.coefficients.map(coef => ({
-              variable_name: coef.variable_name || coef.variableName || "",
-              coefficient: coef.coefficient,
-              std_error: coef.std_error,
-              t_statistic: coef.t_statistic,
-              p_value: coef.p_value,
-              confidence_interval_lower: coef.confidence_interval_lower,
-              confidence_interval_upper: coef.confidence_interval_upper
-            }) as ResAnalysisCoefficient)}
-          />
-        </div>
-      )}
-      
-
+      {/* Убираем отображение анализа остатков отсюда, так как он уже отображается на странице результатов */}
     </div>
   );
 }
