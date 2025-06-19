@@ -150,10 +150,26 @@ interface WilcoxonSignedRankTestResult {
   sampleSize: number;
 }
 
+interface MannWhitneyTestResult {
+  testType: string;
+  groupColumn: string;
+  valueColumn: string;
+  group1: string;
+  group2: string;
+  group1Size: number;
+  group2Size: number;
+  group1Median: number;
+  group2Median: number;
+  statistic: number;
+  pValue: number;
+  conclusion: string;
+}
+
 interface WilcoxonTestsData {
   signedRankResults?: WilcoxonSignedRankTestResult[];
-  // Поддержка snake_case формата имен
   signed_rank_results?: WilcoxonSignedRankTestResult[];
+  mannWhitneyResults?: MannWhitneyTestResult[];
+  mann_whitney_results?: MannWhitneyTestResult[];
 }
 
 // Обновляем тип AnalysisResultsMap, чтобы он соответствовал фактическим данным от API
@@ -355,37 +371,16 @@ interface HistogramChartData {
 }
 
 const AnalysisResultPage: React.FC = () => {
+  const params = useParams();
+  const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const { t } = useTranslation()
-  const params = useParams()
-  const id = params.id as string
-  
-  const [results, setResults] = useState<AnalysisResultsMap | null>(null)
-  const [loading, setLoading] = useState<boolean>(true)
-  const [error, setError] = useState<string | null>(null)
-  const [selectedModelType, setSelectedModelType] = useState<string | undefined>(undefined);
-  const [globalYScaleDomain, setGlobalYScaleDomain] = useState<[number, number] | null>(null);
-  const [globalXScaleDomain, setGlobalXScaleDomain] = useState<[number, number] | null>(null);
-  const [deleting, setDeleting] = useState<boolean>(false);
-  
-  // Мы больше не добавляем тестовые данные принудительно, 
-  // а используем только реальные данные из БД
-  
-  // Общая проверка наличия результатов тестов Вилкоксона - достаточно наличия объекта wilcoxon_tests
-  const hasWilcoxonTests = !!results?.wilcoxon_tests;
-  
-  // Проверяем наличие конкретного типа результатов
-  const hasWilcoxonSignedRank = !!results?.wilcoxon_tests?.signedRankResults?.length || !!results?.wilcoxon_tests?.signed_rank_results?.length;
-  
-  // Удаляем проверку на тест Манна-Уитни
-  
-  // Удаляю отладочные логи
-  
-  // Проверка значения TabsList className
-  // console.log("%c[DEBUG] Grid classes check", "font-weight: bold; color: green;", {
-  //   tabsListClasses: "grid w-full grid-cols-5 mb-4",
-  // });
 
-  // Используем checkTokenValidity из модуля auth
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [analysisResults, setAnalysisResults] = useState<AnalysisResultsMap | null>(null);
+  const [activeTab, setActiveTab] = useState("descriptive_stats"); // Default tab
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedModelType, setSelectedModelType] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (!id) return
@@ -394,7 +389,7 @@ const AnalysisResultPage: React.FC = () => {
     if (!checkTokenValidity()) return;
 
     const fetchResultDetails = async () => {
-      setLoading(true)
+      setIsLoading(true)
       setError(null)
       
       // Получаем токен из localStorage, проверяем наличие и срок действия
@@ -429,7 +424,7 @@ const AnalysisResultPage: React.FC = () => {
 
       if (!token || token === 'undefined') {
         setError(t('auth_error_token_not_found'))
-        setLoading(false)
+        setIsLoading(false)
         return
       }
 
@@ -450,7 +445,7 @@ const AnalysisResultPage: React.FC = () => {
           // Добавляем обработку ошибок 403 (Forbidden) и 404 (Not Found) - доступ к чужим результатам
           if (response.status === 403 || response.status === 404) {
             setError(t('access_denied_error') || 'У вас нет доступа к этим результатам анализа')
-            setLoading(false)
+            setIsLoading(false)
             return;
           }
           
@@ -475,14 +470,14 @@ const AnalysisResultPage: React.FC = () => {
         // Проверка и преобразование данных тестов Вилкоксона
         if (analysisData.wilcoxon_tests) {
           // Удаляю отладочные логи
-          // console.log("Original wilcoxon_tests:", analysisData.wilcoxon_tests);
+          
           
           // Проверяем, пришли ли данные как строка JSON
           if (typeof analysisData.wilcoxon_tests === 'string') {
             try {
-              // console.log("Raw wilcoxon_tests string:", analysisData.wilcoxon_tests);
+              
               analysisData.wilcoxon_tests = JSON.parse(analysisData.wilcoxon_tests);
-              // console.log("Parsed wilcoxon_tests from string:", analysisData.wilcoxon_tests);
+              
             } catch (e) {
               console.error("Ошибка при парсинге wilcoxon_tests из строки:", e);
             }
@@ -491,9 +486,9 @@ const AnalysisResultPage: React.FC = () => {
           // Дополнительная проверка, если это вложенная строка JSON
           if (analysisData.wilcoxon_tests?.signed_rank_results && typeof analysisData.wilcoxon_tests.signed_rank_results === 'string') {
             try {
-              // console.log("Raw signed_rank_results string:", analysisData.wilcoxon_tests.signed_rank_results);
+              
               analysisData.wilcoxon_tests.signed_rank_results = JSON.parse(analysisData.wilcoxon_tests.signed_rank_results);
-              // console.log("Parsed signed_rank_results:", analysisData.wilcoxon_tests.signed_rank_results);
+              
             } catch (e) {
               console.error("Ошибка при парсинге signed_rank_results:", e);
             }
@@ -501,31 +496,15 @@ const AnalysisResultPage: React.FC = () => {
           
           if (analysisData.wilcoxon_tests?.mann_whitney_results && typeof analysisData.wilcoxon_tests.mann_whitney_results === 'string') {
             try {
-              // console.log("Raw mann_whitney_results string:", analysisData.wilcoxon_tests.mann_whitney_results);
+              
               analysisData.wilcoxon_tests.mann_whitney_results = JSON.parse(analysisData.wilcoxon_tests.mann_whitney_results);
-              // console.log("Parsed mann_whitney_results:", analysisData.wilcoxon_tests.mann_whitney_results);
+              
             } catch (e) {
               console.error("Ошибка при парсинге mann_whitney_results:", e);
             }
           }
           
-          // Проверка данных для signed_rank_results
-          // console.log("Проверка данных для signed_rank_results:", {
-          //   exists: !!analysisData.wilcoxon_tests?.signed_rank_results, 
-          //   type: typeof analysisData.wilcoxon_tests?.signed_rank_results,
-          //   isArray: Array.isArray(analysisData.wilcoxon_tests?.signed_rank_results),
-          //   length: analysisData.wilcoxon_tests?.signed_rank_results?.length || 0,
-          //   value: analysisData.wilcoxon_tests?.signed_rank_results
-          // });
-          
-          // Проверка данных для signedRankResults (прямая структура из БД)
-          // console.log("Проверка данных для signedRankResults:", {
-          //   exists: !!analysisData.wilcoxon_tests?.signedRankResults, 
-          //   type: typeof analysisData.wilcoxon_tests?.signedRankResults,
-          //   isArray: Array.isArray(analysisData.wilcoxon_tests?.signedRankResults),
-          //   length: analysisData.wilcoxon_tests?.signedRankResults?.length || 0,
-          //   value: analysisData.wilcoxon_tests?.signedRankResults
-          // });
+
           
           // Обработка случая, когда данные уже доступны в формате signedRankResults из БД
           if (analysisData.wilcoxon_tests?.signedRankResults && 
@@ -534,8 +513,7 @@ const AnalysisResultPage: React.FC = () => {
               !analysisData.wilcoxon_tests?.signed_rank_results) {
             // Копируем данные в snake_case формат для совместимости
             analysisData.wilcoxon_tests.signed_rank_results = analysisData.wilcoxon_tests.signedRankResults;
-            // console.log("Скопированы данные из signedRankResults в signed_rank_results:", 
-            //            analysisData.wilcoxon_tests.signed_rank_results);
+
           }
           
           // Преобразуем snake_case в camelCase для теста Вилкоксона знаковых рангов
@@ -566,7 +544,8 @@ const AnalysisResultPage: React.FC = () => {
               console.error("Ошибка при преобразовании signed_rank_results:", e);
               analysisData.wilcoxon_tests.signedRankResults = [];
             }
-          } else {
+          } else if (!analysisData.wilcoxon_tests.signedRankResults) {
+            // Если snake_case отсутствует и camelCase тоже, инициализируем пустым массивом
             analysisData.wilcoxon_tests.signedRankResults = [];
           }
           
@@ -603,7 +582,8 @@ const AnalysisResultPage: React.FC = () => {
               console.error("Ошибка при преобразовании mann_whitney_results:", e);
               analysisData.wilcoxon_tests.mannWhitneyResults = [];
             }
-          } else {
+          } else if (!analysisData.wilcoxon_tests.mannWhitneyResults) {
+            // Если snake_case отсутствует и camelCase тоже, инициализируем пустым массивом
             analysisData.wilcoxon_tests.mannWhitneyResults = [];
           }
           
@@ -643,51 +623,87 @@ const AnalysisResultPage: React.FC = () => {
           }
         }
         
-        setResults(analysisData);
-
+        // Определяем лучшую модель ДО установки состояния
         if (analysisData?.regression_analysis?.models && analysisData.regression_analysis.models.length > 0) {
-          // Сортируем модели по adjusted_r_squared (убывание)
           const sortedModels = [...analysisData.regression_analysis.models].sort((a, b) => {
-            const adjR2A = typeof a.adjusted_r_squared === 'number' && !isNaN(a.adjusted_r_squared) ? a.adjusted_r_squared : -Infinity;
-            const adjR2B = typeof b.adjusted_r_squared === 'number' && !isNaN(b.adjusted_r_squared) ? b.adjusted_r_squared : -Infinity;
-            return adjR2B - adjR2A;
+            const adjR2A = typeof (a.adjusted_r_squared || a.adjustedRSquared) === 'number' && !isNaN(a.adjusted_r_squared || a.adjustedRSquared || 0) ? (a.adjusted_r_squared || a.adjustedRSquared || 0) : -Infinity;
+            const adjR2B = typeof (b.adjusted_r_squared || b.adjustedRSquared) === 'number' && !isNaN(b.adjusted_r_squared || b.adjustedRSquared || 0) ? (b.adjusted_r_squared || b.adjustedRSquared || 0) : -Infinity;
+            
+            if (adjR2A !== adjR2B) {
+              return adjR2B - adjR2A; // 1. По Adjusted R² (убывание)
+            }
+      
+            const isAQuadratic = (a.regression_type === "Quadratic" || a.regressionType === "Quadratic");
+            const isBQuadratic = (b.regression_type === "Quadratic" || b.regressionType === "Quadratic");
+            if (isAQuadratic && !isBQuadratic) return -1; // 2. Quadratic предпочтительнее
+            if (!isAQuadratic && isBQuadratic) return 1;
+      
+            const sseA = typeof a.sse === 'number' && !isNaN(a.sse) ? a.sse : Infinity;
+            const sseB = typeof b.sse === 'number' && !isNaN(b.sse) ? b.sse : Infinity;
+            if (sseA !== sseB) {
+              return sseA - sseB; // 3. По SSE (возрастание)
+            }
+            
+            return (a.regression_type || a.regressionType || "").localeCompare(b.regression_type || b.regressionType || ""); // 4. По имени (алфавитный порядок)
           });
-          
-          // Выбираем лучшую модель по умолчанию
-          setSelectedModelType(sortedModels[0].regression_type);
+
+          if (sortedModels.length > 0) {
+            const bestModel = sortedModels[0];
+            setSelectedModelType(bestModel.regression_type || bestModel.regressionType);
+          }
         }
+        
+        setAnalysisResults(analysisData);
 
       } catch (err: any) {
         console.error("Ошибка при получении данных:", err);
         setError(err.message || t('unknown_error_occurred'));
       } finally {
-        setLoading(false);
+        setIsLoading(false);
       }
     }
 
     fetchResultDetails()
   }, [id, t])
 
-  if (loading) {
-    return <div className="flex justify-center items-center h-64"><RefreshCw className="animate-spin h-8 w-8 text-primary" /> <p className="ml-2">{t('loading_results_message')}</p></div>
+  const handleModelChange = (modelType: string) => {
+    setSelectedModelType(modelType);
+  };
+    
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <Loader2 className="animate-spin h-16 w-16 text-primary" />
+        <p className="mt-4 text-lg text-gray-600">{t("loading_results")}</p>
+      </div>
+    );
   }
 
-  if (error) return <div className="text-red-500 text-center py-10">{t('error_loading_results_message') + ': ' + error}</div>
-  if (!results) return <div className="text-center py-10">{t('no_results_found_message')}</div>
+  if (error) {
+    return (
+      <div className="text-red-500 text-center py-10">{t('error_loading_results_message') + ': ' + error}</div>
+    );
+  }
+
+  if (!analysisResults) {
+    return <div className="text-center py-10">{t('no_results_found_message')}</div>;
+  }
 
   // Проверяем наличие данных нормальности в любом из возможных форматов
-  const hasNormalityTests = results.normality_tests && 
-    ((results.normality_tests.shapiroWilkResults && results.normality_tests.shapiroWilkResults.length > 0) || 
-     (results.normality_tests.chiSquareResults && results.normality_tests.chiSquareResults.length > 0));
+  const hasNormalityTests = analysisResults && analysisResults.normality_tests && 
+    ((analysisResults.normality_tests.shapiroWilkResults && analysisResults.normality_tests.shapiroWilkResults.length > 0) || 
+     (analysisResults.normality_tests.chiSquareResults && analysisResults.normality_tests.chiSquareResults.length > 0));
   
+  const hasWilcoxonTests = !!(analysisResults && analysisResults.wilcoxon_tests);
+
   // Определяем текущую модель регрессии
-  const currentRegressionModel = results?.regression_analysis?.models?.find(m => 
+  const currentRegressionModel = analysisResults?.regression_analysis?.models?.find(m => 
     (m.regression_type === selectedModelType || m.regressionType === selectedModelType)
   );
 
   // Подготовка данных для DistributionChart
   const histogramChartDataForDistributionChart: HistogramChartData[] | undefined = 
-    results.descriptive_stats?.histograms.map(hist => {
+    analysisResults?.descriptive_stats?.histograms.map(hist => {
       // Проверяем наличие данных нормальной кривой в разных форматах имен полей
       const normalCurveX = (hist as any).normal_curve_x || (hist as any).normalCurveX;
       const normalCurveY = (hist as any).normal_curve_y || (hist as any).normalCurveY;
@@ -709,18 +725,18 @@ const AnalysisResultPage: React.FC = () => {
     });
     
   // Получаем глобальный масштаб для оси Y из утилиты
-  const globalYDomain = results?.regression_analysis ? 
+  const globalYDomain = analysisResults?.regression_analysis ? 
     calculateGlobalYDomain(
-      results.regression_analysis.data_points || results.regression_analysis.dataPoints || [],
-      results.regression_analysis.models || []
+      analysisResults.regression_analysis?.data_points || analysisResults.regression_analysis?.dataPoints || [],
+      analysisResults.regression_analysis?.models || []
     ) : undefined;
 
   // Создаем пропсы для RegressionChart, выбирая текущую модель
   const regressionChartProps: RegressionChartProps | undefined = 
     currentRegressionModel && 
-    results?.regression_analysis ? {
-      data: results.regression_analysis.data_points || 
-            results.regression_analysis.dataPoints || [],
+    analysisResults?.regression_analysis ? {
+      data: analysisResults.regression_analysis.data_points || 
+            analysisResults.regression_analysis.dataPoints || [],
       models: [{
         type: currentRegressionModel.regression_type || currentRegressionModel.regressionType || "",
         coefficients: currentRegressionModel.coefficients || [],
@@ -728,14 +744,14 @@ const AnalysisResultPage: React.FC = () => {
         residuals: currentRegressionModel.residuals || []
         // Удаляем передачу residuals_analysis и отладочного кода из RegressionChartProps
       }],
-      dependentVar: results.regression_analysis.dependent_variable || 
-                   results.regression_analysis.dependentVariable || "Y",
-      independentVar: (results.regression_analysis.independent_variables && 
-                      results.regression_analysis.independent_variables.length > 0) ? 
-                      results.regression_analysis.independent_variables[0] : 
-                      (results.regression_analysis.independentVariables && 
-                      results.regression_analysis.independentVariables.length > 0) ?
-                      results.regression_analysis.independentVariables[0] : "X",
+      dependentVar: analysisResults.regression_analysis.dependent_variable || 
+                   analysisResults.regression_analysis.dependentVariable || "Y",
+      independentVar: (analysisResults.regression_analysis.independent_variables && 
+                      analysisResults.regression_analysis.independent_variables.length > 0) ? 
+                      analysisResults.regression_analysis.independent_variables[0] : 
+                      (analysisResults.regression_analysis.independentVariables && 
+                      analysisResults.regression_analysis.independentVariables.length > 0) ?
+                      analysisResults.regression_analysis.independentVariables[0] : "X",
       height: 500,
       globalYDomain: globalYDomain
     } : undefined;
@@ -792,12 +808,13 @@ const AnalysisResultPage: React.FC = () => {
 
   // Добавляем после определения renderNormalityTestTable
   const renderRegressionTabContent = () => {
-    if (!results?.regression_analysis?.models || results.regression_analysis.models.length === 0) {
+    if (!analysisResults?.regression_analysis?.models || analysisResults.regression_analysis.models.length === 0) {
       return <p className="text-center py-4">Нет данных регрессионного анализа</p>;
     }
+    const regressionAnalysis = analysisResults.regression_analysis;
 
     // Сортировка моделей по adjusted_r_squared (убывание)
-    const sortedModels = [...results.regression_analysis.models].sort((a, b) => {
+    const sortedModels = [...regressionAnalysis.models].sort((a, b) => {
       const adjR2A = typeof (a.adjusted_r_squared || a.adjustedRSquared) === 'number' && 
                     !isNaN(a.adjusted_r_squared || a.adjustedRSquared || 0) ? 
                     (a.adjusted_r_squared || a.adjustedRSquared || 0) : -Infinity;
@@ -825,13 +842,16 @@ const AnalysisResultPage: React.FC = () => {
 
     // Используем переменную currentRegressionModel, объявленную выше
     const currentModel = currentRegressionModel || sortedModels[0];
+    if (!currentModel) {
+      return <p className="text-center py-4">Не удалось определить текущую модель для отображения.</p>;
+    }
     const modelType = currentModel.regression_type || currentModel.regressionType || "";
 
     // Получаем переменные с поддержкой camelCase
-    const depVar = results.regression_analysis.dependent_variable || 
-                  results.regression_analysis.dependentVariable || "y";
-    const indepVars = results.regression_analysis.independent_variables || 
-                    results.regression_analysis.independentVariables || [];
+    const depVar = regressionAnalysis.dependent_variable || 
+                  regressionAnalysis.dependentVariable || "y";
+    const indepVars = regressionAnalysis.independent_variables || 
+                    regressionAnalysis.independentVariables || [];
     const indepVar = indepVars.length > 0 ? indepVars[0] : "x";
 
     return (
@@ -857,7 +877,7 @@ const AnalysisResultPage: React.FC = () => {
         {/* Уравнение регрессии */}
         <div className="bg-blue-50 p-3 rounded-md">
           <p className="font-medium text-blue-800">
-            Уравнение регрессии ({regressionTypeTranslations[modelType] || modelType}):
+            {t("regressionEquation")} ({regressionTypeTranslations[modelType] || modelType}):
           </p>
           <p className="mt-1 text-sm md:text-base break-all">
             {formatRegressionEquation(
@@ -989,14 +1009,6 @@ const AnalysisResultPage: React.FC = () => {
                   let displayName = varName;
                   if (varName === "const") {
                     displayName = "Константа";
-                  } else if (varName === "a") {
-                    displayName = "a";
-                  } else if (varName === "b") {
-                    displayName = "b";
-                  } else if (varName === "c") {
-                    displayName = "c";
-                  } else if (varName === "d") {
-                    displayName = "d";
                   } else if (varName.startsWith(indepVar + "^")) {
                     displayName = `${indepVar}^${varName.split("^")[1]}`;
                   } else if (varName.match(/^c\d+$/)) {
@@ -1006,8 +1018,6 @@ const AnalysisResultPage: React.FC = () => {
                     else displayName = `${indepVar}^${degree}`;
                   } else if (indepVar && varName === indepVar) {
                     displayName = indepVar;
-                  } else if (modelType === "Quadratic" && varName.includes("**2")) {
-                    displayName = `${indepVar}²`;
                   }
                   
                   return (
@@ -1053,9 +1063,7 @@ const AnalysisResultPage: React.FC = () => {
                         <TableCell>{formatNumber(model.r_squared || model.rSquared)}</TableCell>
                         <TableCell>{formatNumber(model.adjusted_r_squared || model.adjustedRSquared)}</TableCell>
                         <TableCell>
-                          {modelRegType === "Sigmoid" || modelRegType === "Trigonometric" 
-                            ? "Не применимо" 
-                            : formatNumber(model.f_statistic || model.fStatistic)}
+                          {formatNumber(model.f_statistic || model.fStatistic)}
                         </TableCell>
                         <TableCell>{formatNumber(model.sse)}</TableCell>
                       </TableRow>
@@ -1139,84 +1147,129 @@ const AnalysisResultPage: React.FC = () => {
     );
   };
 
-  // Функция рендеринга вкладки с тестами Вилкоксона с обработкой ошибок
+  const renderMannWhitneyTable = (testResults: MannWhitneyTestResult[] | undefined) => {
+    if (!testResults || testResults.length === 0) {
+      return null; // Don't render anything if no data
+    }
+
+    return (
+      <div className="mt-6">
+        <h3 className="text-xl font-semibold mb-4">{t('mann_whitney_test')}</h3>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{t("group_column")}</TableHead>
+              <TableHead>{t("value_column")}</TableHead>
+              <TableHead>{t("group1")} / {t("group2")}</TableHead>
+              <TableHead>{t("group_sizes")}</TableHead>
+              <TableHead>{t("group_medians")}</TableHead>
+              <TableHead>{t("statistic")}</TableHead>
+              <TableHead>{t("p_value")}</TableHead>
+              <TableHead>{t("conclusion")}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {testResults.map((result, index) => (
+              <TableRow key={`mw-${index}`}>
+                <TableCell>{result.groupColumn}</TableCell>
+                <TableCell>{result.valueColumn}</TableCell>
+                <TableCell>{result.group1} / {result.group2}</TableCell>
+                <TableCell>{result.group1Size} / {result.group2Size}</TableCell>
+                <TableCell>{formatNumber(result.group1Median, 3)} / {formatNumber(result.group2Median, 3)}</TableCell>
+                <TableCell>{formatNumber(result.statistic, 4)}</TableCell>
+                <TableCell>{formatNumber(result.pValue, 4)}</TableCell>
+                <TableCell>
+                  {result.pValue > 0.05 ? (
+                    <div className="flex items-center">
+                      <CheckCircle2 className="mr-1 h-4 w-4 text-green-500" />
+                      <span>{result.conclusion}</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center">
+                      <AlertCircle className="mr-1 h-4 w-4 text-amber-500" />
+                      <span>{result.conclusion}</span>
+                    </div>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    );
+  };
+
   const renderWilcoxonTabContent = () => {
-    try {
-      // Преобразование данных для совместимости, если нужно
-      let signedRankData = results?.wilcoxon_tests?.signedRankResults || results?.wilcoxon_tests?.signed_rank_results;
-      
-      return (
-        <div className="space-y-6">
-          {/* Тест знаковых рангов Вилкоксона */}
-          <Card className="overflow-hidden">
-            <CardHeader>
-              <CardTitle>{t('wilcoxon_signed_rank_test')}</CardTitle>
-              <CardDescription>{t('wilcoxon_signed_rank_description')}</CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-auto max-h-[500px]">
-                {renderWilcoxonSignedRankTable(signedRankData)}
-              </div>
-            </CardContent>
-          </Card>
+    const signedRankData = analysisResults?.wilcoxon_tests?.signedRankResults || analysisResults?.wilcoxon_tests?.signed_rank_results;
+    const mannWhitneyData = analysisResults?.wilcoxon_tests?.mannWhitneyResults || analysisResults?.wilcoxon_tests?.mann_whitney_results;
+    
+    const hasSignedRank = signedRankData && signedRankData.length > 0;
+    const hasMannWhitney = mannWhitneyData && mannWhitneyData.length > 0;
 
-          {/* Тест Манна-Уитни - удален */}
-
-          {/* Показываем сообщение только если нет данных по тестам Вилкоксона */}
-          {hasWilcoxonTests && 
-           !hasWilcoxonSignedRank && (
-            <div className="flex flex-col items-center justify-center py-12">
-              <div className="bg-blue-50 border border-blue-300 rounded-md p-4 text-center">
-                <p className="text-blue-700 font-medium">{t('no_wilcoxon_tests_performed')}</p>
-                <p className="text-sm text-blue-600 mt-2">
-                  Тесты Вилкоксона были выбраны при анализе, но подходящих данных для тестов не найдено.
-                  Проверьте требования и формат ваших данных.
-                </p>
-              </div>
-            </div>
-          )}
-          
-          {/* Показываем сообщение если wilcoxon_tests полностью отсутствует */}
-          {!hasWilcoxonTests && (
-            <div className="flex flex-col items-center justify-center py-12">
-              <div className="bg-blue-50 border border-blue-300 rounded-md p-4 text-center">
-                <p className="text-blue-700 font-medium">{t('no_wilcoxon_tests_performed')}</p>
-                <p className="text-sm text-blue-600 mt-2">
-                  Тесты Вилкоксона не были выбраны при анализе данных.
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-      );
-    } catch (error) {
-      console.error("Ошибка при отображении тестов Вилкоксона:", error);
+    if (!hasSignedRank && !hasMannWhitney) {
       return (
-        <div className="p-4 border border-red-500 bg-red-50 rounded-md">
-          <h3 className="font-medium text-red-600 mb-2">Ошибка при отображении результатов</h3>
-          <p>{error instanceof Error ? error.message : "Неизвестная ошибка"}</p>
-          <p className="mt-2 text-sm">Проверьте консоль разработчика для деталей.</p>
+        <div className="text-center py-8">
+          <p>{t("no_wilcoxon_tests_performed")}</p>
         </div>
       );
     }
+    
+    return (
+      <Card>
+        <CardHeader>
+           <CardTitle>{t("wilcoxon_tests")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {hasSignedRank && renderWilcoxonSignedRankTable(signedRankData)}
+          {hasMannWhitney && renderMannWhitneyTable(mannWhitneyData)}
+        </CardContent>
+      </Card>
+    );
+  };
+
+  const renderErrorContent = (error: AnalysisResultsMap['error']) => {
+    if (!error) return null;
+    return (
+      <Card className="mb-4 border-red-500">
+        <CardHeader>
+          <CardTitle className="text-red-700 flex items-center">
+            <AlertCircle size={20} className="mr-2"/> Ошибка анализа
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-4">
+          <p><strong>Код ошибки:</strong> {error.code}</p>
+          <p><strong>Сообщение:</strong> {error.message}</p>
+          {error.details && error.details.length > 0 && (
+            <div className="mt-2">
+              <strong>Детали:</strong>
+              <ul className="list-disc list-inside">
+                {error.details.map((detail, idx) => (
+                  <li key={idx}>{detail}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
   };
 
   // Отладочный вывод доступных вкладок
   console.log("%c[DEBUG] Available tabs:", "font-weight: bold; color: purple;", {
-    descriptive_stats: !!results.descriptive_stats,
+    descriptive_stats: !!analysisResults.descriptive_stats,
     hasNormalityTests,
     hasWilcoxonTests,
-    regression_analysis: !!results.regression_analysis,
-    processing_log: !!(results.processing_log && results.processing_log.length > 0),
+    regression_analysis: !!analysisResults.regression_analysis,
+    processing_log: !!(analysisResults.processing_log && analysisResults.processing_log.length > 0),
     defaultTabValue: 
-      results.descriptive_stats ? "desc_stats" : 
+      analysisResults.descriptive_stats ? "desc_stats" : 
       hasNormalityTests ? "norm_tests" :
       hasWilcoxonTests ? "wilcoxon" :
-      results.regression_analysis ? "reg_analysis" : "logs"
+      analysisResults.regression_analysis ? "reg_analysis" : "logs"
   });
   
   const handleDeleteAnalysis = async () => {
-    setDeleting(true);
+    setIsDeleting(true);
     try {
       const response = await fetch(`http://localhost:8080/api/analyses/history/${id}`, {
         method: 'DELETE',
@@ -1235,16 +1288,26 @@ const AnalysisResultPage: React.FC = () => {
       console.error('Ошибка при удалении анализа:', error);
       setError('Произошла ошибка при удалении анализа');
     } finally {
-      setDeleting(false);
+      setIsDeleting(false);
     }
   };
   
+  const hasSignedRankData = analysisResults?.wilcoxon_tests && 
+    ((analysisResults.wilcoxon_tests.signedRankResults && analysisResults.wilcoxon_tests.signedRankResults.length > 0) || 
+     (analysisResults.wilcoxon_tests.signed_rank_results && analysisResults.wilcoxon_tests.signed_rank_results.length > 0));
+
+  const hasMannWhitneyData = analysisResults?.wilcoxon_tests &&
+    ((analysisResults.wilcoxon_tests.mannWhitneyResults && analysisResults.wilcoxon_tests.mannWhitneyResults.length > 0) ||
+     (analysisResults.wilcoxon_tests.mann_whitney_results && analysisResults.wilcoxon_tests.mann_whitney_results.length > 0));
+     
+  const showWilcoxonTab = hasSignedRankData || hasMannWhitneyData;
+
   return (
     <div className="container mx-auto p-4">
       <Card>
         <CardHeader>
           <CardTitle className="flex justify-between">
-            Результаты Анализа (ID: {id})
+            {t("results.title")} (ID: {id})
             <Button
               variant="outline"
               size="sm"
@@ -1257,65 +1320,38 @@ const AnalysisResultPage: React.FC = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {results.error && (
-            <Card className="mb-4 border-red-500">
-              <CardHeader className="bg-red-50">
-                <CardTitle className="text-red-700 flex items-center">
-                  <AlertCircle size={20} className="mr-2"/> Ошибка анализа
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <p><strong>Код ошибки:</strong> {results.error.code}</p>
-                <p><strong>Сообщение:</strong> {results.error.message}</p>
-                {results.error.details && results.error.details.length > 0 && (
-                  <div className="mt-2">
-                    <strong>Детали:</strong>
-                    <ul className="list-disc list-inside">
-                      {results.error.details.map((detail, idx) => (
-                        <li key={idx}>{detail}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+          {renderErrorContent(analysisResults?.error)}
           
           <Tabs defaultValue={
-            results.descriptive_stats ? "desc_stats" : 
+            analysisResults.descriptive_stats ? "desc_stats" : 
             hasNormalityTests ? "norm_tests" :
             hasWilcoxonTests ? "wilcoxon" :
-            results.regression_analysis ? "reg_analysis" : "logs"
+            analysisResults.regression_analysis ? "reg_analysis" : "logs"
           } className="w-full">
             {/* ВАЖНО: grid-cols-n должно соответствовать количеству видимых вкладок */}
             <TabsList className={`grid w-full mb-4 ${
               [
-                results.descriptive_stats, 
+                analysisResults.descriptive_stats, 
                 hasNormalityTests, 
-                results.wilcoxon_tests && ((results.wilcoxon_tests.signedRankResults && results.wilcoxon_tests.signedRankResults.length > 0) || 
-                                          (results.wilcoxon_tests.signed_rank_results && results.wilcoxon_tests.signed_rank_results.length > 0)), 
-                results.regression_analysis, 
-                results.processing_log && results.processing_log.length > 0
+                showWilcoxonTab, 
+                analysisResults.regression_analysis, 
+                analysisResults.processing_log && analysisResults.processing_log.length > 0
               ].filter(Boolean).length <= 3 ? 'grid-cols-3' : 'grid-cols-5'
             }`}>
-              {results.descriptive_stats && <TabsTrigger value="desc_stats">Описательная статистика</TabsTrigger>}
+              {analysisResults.descriptive_stats && <TabsTrigger value="desc_stats">Описательная статистика</TabsTrigger>}
               {hasNormalityTests && <TabsTrigger value="norm_tests">Проверка нормальности</TabsTrigger>}
               {/* Отображаем вкладку тестов Вилкоксона только если есть данные */}
-              {results.wilcoxon_tests && 
-                ((results.wilcoxon_tests.signedRankResults && results.wilcoxon_tests.signedRankResults.length > 0) || 
-                (results.wilcoxon_tests.signed_rank_results && results.wilcoxon_tests.signed_rank_results.length > 0)) && 
-                <TabsTrigger value="wilcoxon">Тесты Вилкоксона</TabsTrigger>
-              }
-              {results.regression_analysis && <TabsTrigger value="reg_analysis">Модели регрессии</TabsTrigger>}
-              {results.processing_log && results.processing_log.length > 0 && <TabsTrigger value="logs">Лог обработки</TabsTrigger>}
+              {showWilcoxonTab && <TabsTrigger value="wilcoxon">Тесты Вилкоксона</TabsTrigger>}
+              {analysisResults.regression_analysis && <TabsTrigger value="reg_analysis">Модели регрессии</TabsTrigger>}
+              {analysisResults.processing_log && analysisResults.processing_log.length > 0 && <TabsTrigger value="logs">Лог обработки</TabsTrigger>}
             </TabsList>
 
-            {results.descriptive_stats && (
+            {analysisResults.descriptive_stats && (
               <TabsContent value="desc_stats">
                 <Card>
                   <CardHeader><CardTitle>Описательная статистика</CardTitle></CardHeader>
                   <CardContent className="space-y-6">
-                    {results.descriptive_stats.descriptives && results.descriptive_stats.descriptives.length > 0 ? (
+                    {analysisResults.descriptive_stats.descriptives && analysisResults.descriptive_stats.descriptives.length > 0 ? (
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -1336,7 +1372,7 @@ const AnalysisResultPage: React.FC = () => {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {results.descriptive_stats.descriptives.map((stat, index) => (
+                          {analysisResults.descriptive_stats.descriptives.map((stat, index) => (
                             <TableRow key={`desc-${index}-${stat.variableName}`}>
                               <TableCell>{stat.variableName}</TableCell>
                               <TableCell>{stat.count}</TableCell>
@@ -1365,7 +1401,7 @@ const AnalysisResultPage: React.FC = () => {
                     ) : <p>Нет данных описательной статистики</p>}
 
                     {/* Гистограммы распределения */}
-                    {results.descriptive_stats.histograms && results.descriptive_stats.histograms.length > 0 && histogramChartDataForDistributionChart && (
+                    {analysisResults.descriptive_stats.histograms && analysisResults.descriptive_stats.histograms.length > 0 && histogramChartDataForDistributionChart && (
                       <div>
                         <h3 className="text-lg font-semibold mb-4">Гистограммы Распределения</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1388,11 +1424,11 @@ const AnalysisResultPage: React.FC = () => {
                     )}
 
                     {/* Доверительные интервалы */}
-                    {results.descriptive_stats.confidenceIntervals && results.descriptive_stats.confidenceIntervals.length > 0 && (
-                      <div>
+                    {analysisResults.descriptive_stats.confidenceIntervals && analysisResults.descriptive_stats.confidenceIntervals.length > 0 && (
+                      <div className="hidden">
                         <h3 className="text-lg font-semibold mb-4">Доверительные Интервалы</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          {results.descriptive_stats.confidenceIntervals.map((ci, index) => (
+                          {analysisResults.descriptive_stats.confidenceIntervals.map((ci, index) => (
                             <div key={`ci-${index}-${ci.columnName}`} className="border rounded-lg p-4">
                               <h4 className="text-md font-semibold mb-2 text-center">{ci.columnName}</h4>
                               <div className="space-y-2">
@@ -1419,10 +1455,10 @@ const AnalysisResultPage: React.FC = () => {
                   </CardHeader>
                   <CardContent className="space-y-6">
                     {/* Shapiro-Wilk Test Results */}
-                    {results.normality_tests && 
-                     results.normality_tests.shapiroWilkResults && 
-                     Array.isArray(results.normality_tests.shapiroWilkResults) && 
-                     results.normality_tests.shapiroWilkResults.length > 0 ? (
+                    {analysisResults.normality_tests && 
+                     analysisResults.normality_tests.shapiroWilkResults && 
+                     Array.isArray(analysisResults.normality_tests.shapiroWilkResults) && 
+                     analysisResults.normality_tests.shapiroWilkResults.length > 0 ? (
                       <div>
                         <h3 className="text-lg font-semibold mb-4">Тест Шапиро-Уилка</h3>
                         <Table>
@@ -1435,7 +1471,7 @@ const AnalysisResultPage: React.FC = () => {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {results.normality_tests.shapiroWilkResults.map((test, index) => {
+                            {analysisResults.normality_tests.shapiroWilkResults.map((test, index) => {
                               // Приводим к правильному формату имен полей (camelCase)
                               const formattedTest = {
                                 columnName: test.columnName || "неизвестная переменная",
@@ -1469,10 +1505,10 @@ const AnalysisResultPage: React.FC = () => {
                     ) : null}
                     
                     {/* Chi-Square Test Results */}
-                    {results.normality_tests && 
-                     results.normality_tests.chiSquareResults && 
-                     Array.isArray(results.normality_tests.chiSquareResults) && 
-                     results.normality_tests.chiSquareResults.length > 0 ? (
+                    {analysisResults.normality_tests && 
+                     analysisResults.normality_tests.chiSquareResults && 
+                     Array.isArray(analysisResults.normality_tests.chiSquareResults) && 
+                     analysisResults.normality_tests.chiSquareResults.length > 0 ? (
                       <div>
                         <h3 className="text-lg font-semibold mb-4">Тест Хи-квадрат (Пирсона)</h3>
                         <Table>
@@ -1487,7 +1523,7 @@ const AnalysisResultPage: React.FC = () => {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {results.normality_tests.chiSquareResults.map((test, index) => {
+                            {analysisResults.normality_tests.chiSquareResults.map((test, index) => {
                               // Приводим к правильному формату имен полей (camelCase)
                               const formattedTest = {
                                 columnName: test.columnName || "неизвестная переменная",
@@ -1524,17 +1560,17 @@ const AnalysisResultPage: React.FC = () => {
                       </div>
                     ) : null}
 
-                    {(!results.normality_tests || 
-                     (!results.normality_tests.shapiroWilkResults || !Array.isArray(results.normality_tests.shapiroWilkResults) || !results.normality_tests.shapiroWilkResults.length) && 
-                     (!results.normality_tests.chiSquareResults || !Array.isArray(results.normality_tests.chiSquareResults) || !results.normality_tests.chiSquareResults.length)) && (
+                    {(!analysisResults.normality_tests || 
+                     (!analysisResults.normality_tests.shapiroWilkResults || !Array.isArray(analysisResults.normality_tests.shapiroWilkResults) || !analysisResults.normality_tests.shapiroWilkResults.length) && 
+                     (!analysisResults.normality_tests.chiSquareResults || !Array.isArray(analysisResults.normality_tests.chiSquareResults) || !analysisResults.normality_tests.chiSquareResults.length)) && (
                       <p className="text-center py-4">Нет данных о нормальности распределения</p>
                     )}
 
                     {/* Гистограммы распределения с нормальной кривой - только для переменных из тестов нормальности */}
-                    {results.descriptive_stats?.histograms && 
-                     results.descriptive_stats.histograms.length > 0 && 
+                    {analysisResults.descriptive_stats?.histograms && 
+                     analysisResults.descriptive_stats.histograms.length > 0 && 
                      histogramChartDataForDistributionChart && 
-                     results.normality_tests && (
+                     analysisResults.normality_tests && (
                       <div className="mt-8">
                         <h3 className="text-lg font-semibold mb-4">Гистограммы распределения с наложенной нормальной кривой</h3>
                         
@@ -1543,14 +1579,14 @@ const AnalysisResultPage: React.FC = () => {
                             // Получаем список всех переменных из тестов нормальности
                             const normalityVariables = new Set<string>();
                             
-                            if (results.normality_tests.shapiroWilkResults && Array.isArray(results.normality_tests.shapiroWilkResults)) {
-                              results.normality_tests.shapiroWilkResults.forEach(test => {
+                            if (analysisResults.normality_tests.shapiroWilkResults && Array.isArray(analysisResults.normality_tests.shapiroWilkResults)) {
+                              analysisResults.normality_tests.shapiroWilkResults.forEach(test => {
                                 if (test.columnName) normalityVariables.add(test.columnName);
                               });
                             }
                             
-                            if (results.normality_tests.chiSquareResults && Array.isArray(results.normality_tests.chiSquareResults)) {
-                              results.normality_tests.chiSquareResults.forEach(test => {
+                            if (analysisResults.normality_tests.chiSquareResults && Array.isArray(analysisResults.normality_tests.chiSquareResults)) {
+                              analysisResults.normality_tests.chiSquareResults.forEach(test => {
                                 if (test.columnName) normalityVariables.add(test.columnName);
                               });
                             }
@@ -1645,18 +1681,18 @@ const AnalysisResultPage: React.FC = () => {
               </TabsContent>
             )}
 
-            {results.regression_analysis && (
+            {analysisResults.regression_analysis && (
               <TabsContent value="reg_analysis">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Регрессионный Анализ</CardTitle>
+                    <CardTitle>{t("regressionAnalysis")}</CardTitle>
                     <CardDescription>
-                      Зависимая переменная: {results.regression_analysis.dependent_variable || 
-                        results.regression_analysis.dependentVariable || 'Не указана'} <br />
-                      Независимые переменные: {results.regression_analysis.independent_variables ? 
-                        results.regression_analysis.independent_variables.join(', ') : 
-                        results.regression_analysis.independentVariables ?
-                        results.regression_analysis.independentVariables.join(', ') :
+                      Зависимая переменная: {analysisResults.regression_analysis.dependent_variable || 
+                        analysisResults.regression_analysis.dependentVariable || 'Не указана'} <br />
+                      Независимые переменные: {analysisResults.regression_analysis.independent_variables ? 
+                        analysisResults.regression_analysis.independent_variables.join(', ') : 
+                        analysisResults.regression_analysis.independentVariables ?
+                        analysisResults.regression_analysis.independentVariables.join(', ') :
                         'Не указаны'}
                     </CardDescription>
                   </CardHeader>
@@ -1668,20 +1704,13 @@ const AnalysisResultPage: React.FC = () => {
             )}
 
             {/* Wilcoxon Tests Tab Content - отображаем только если есть данные */}
-            {results.wilcoxon_tests && 
-              ((results.wilcoxon_tests.signedRankResults && results.wilcoxon_tests.signedRankResults.length > 0) || 
-              (results.wilcoxon_tests.signed_rank_results && results.wilcoxon_tests.signed_rank_results.length > 0)) && (
+            {showWilcoxonTab && (
               <TabsContent value="wilcoxon">
-                <Card>
-                  <CardHeader><CardTitle>Тесты Вилкоксона</CardTitle></CardHeader>
-                  <CardContent className="space-y-6">
-                    {renderWilcoxonTabContent()}
-                  </CardContent>
-                </Card>
+                {renderWilcoxonTabContent()}
               </TabsContent>
             )}
 
-            {results.processing_log && results.processing_log.length > 0 && (
+            {analysisResults.processing_log && analysisResults.processing_log.length > 0 && (
               <TabsContent value="logs">
                 <Card>
                   <CardHeader>
@@ -1689,7 +1718,7 @@ const AnalysisResultPage: React.FC = () => {
                   </CardHeader>
                   <CardContent>
                     <pre className="whitespace-pre-wrap bg-muted p-4 rounded-md text-sm">
-                      {results.processing_log.join('\n')}
+                      {analysisResults.processing_log.join('\n')}
                     </pre>
                   </CardContent>
                 </Card>

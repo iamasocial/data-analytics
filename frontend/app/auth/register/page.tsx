@@ -69,18 +69,34 @@ export default function RegisterPage() {
         }),
       });
 
+      const responseData = await response.json();
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Registration failed");
+        throw new Error(responseData.error || "Registration failed");
       }
 
-      // Успешная регистрация
-      toast({
-        title: "Регистрация успешна",
-        description: "Вы успешно зарегистрировались в системе",
-      })
+      const { token, refresh_token } = responseData;
 
-      router.push("/dashboard")
+      if (token) {
+        // Токен получен, сохраняем его и переходим в дашборд
+        localStorage.setItem("authToken", token);
+        if (refresh_token) {
+          localStorage.setItem("refreshToken", refresh_token);
+        }
+
+        toast({
+          title: "Регистрация успешна",
+          description: "Вы вошли в систему и будете перенаправлены.",
+        });
+        router.push("/dashboard");
+      } else {
+        // Токен не пришел, перенаправляем на логин (старое поведение)
+        toast({
+          title: "Регистрация успешна",
+          description: "Теперь вы можете войти в систему, используя свои данные.",
+        });
+        router.push("/auth/login");
+      }
     } catch (error) {
       toast({
         title: "Ошибка регистрации",

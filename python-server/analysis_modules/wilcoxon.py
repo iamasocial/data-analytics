@@ -69,7 +69,7 @@ def perform_wilcoxon_signed_rank_test(df: pd.DataFrame, var1: Optional[str] = No
 
         # Проверяем минимальный размер выборки
         if sample_size < 6:
-            test_result["conclusion"] = f"Skipped (insufficient data, n={sample_size} < 6 recommended)"
+            test_result["conclusion"] = f"Пропущено (недостаточно данных, n={sample_size} < 6 рекомендуется)"
             logs.append(f"Skipped Wilcoxon signed-rank test for '{col1}' and '{col2}' (insufficient data points)")
         else:
             try:
@@ -78,7 +78,7 @@ def perform_wilcoxon_signed_rank_test(df: pd.DataFrame, var1: Optional[str] = No
                 
                 # Проверяем, что есть ненулевые разности
                 if all(abs(diff) < 1e-9 for diff in differences):
-                    test_result["conclusion"] = "Skipped (all differences are zero)"
+                    test_result["conclusion"] = "Пропущено (все разности равны нулю)"
                     logs.append(f"Skipped Wilcoxon signed-rank test for '{col1}' and '{col2}' (all differences are zero)")
                     results.append(test_result)
                     continue
@@ -93,14 +93,14 @@ def perform_wilcoxon_signed_rank_test(df: pd.DataFrame, var1: Optional[str] = No
                 
                 # Интерпретация результата
                 if p_value > alpha:
-                    test_result["conclusion"] = f"No significant difference (fail to reject H0 at alpha={alpha})"
+                    test_result["conclusion"] = f"Статистически значимых различий нет (p > {alpha})"
                 else:
-                    test_result["conclusion"] = f"Significant difference (reject H0 at alpha={alpha})"
+                    test_result["conclusion"] = f"Обнаружены статистически значимые различия (p <= {alpha})"
                 
                 logs.append(f"Performed Wilcoxon signed-rank test for '{col1}' and '{col2}': p={p_value:.4f}")
             
             except Exception as e:
-                test_result["conclusion"] = f"Error: {str(e)}"
+                test_result["conclusion"] = f"Ошибка: {str(e)}"
                 logs.append(f"Error performing Wilcoxon signed-rank test for '{col1}' and '{col2}': {str(e)}")
         
         results.append(test_result)
@@ -176,7 +176,7 @@ def perform_mann_whitney_test(df: pd.DataFrame, group_column: str, value_column:
     min_sample = 5  # Минимальный размер выборки для надежности результатов
     
     if group1_size < min_sample or group2_size < min_sample:
-        test_result["conclusion"] = f"Skipped (insufficient data, group sizes: {group1_size}, {group2_size} < {min_sample} recommended)"
+        test_result["conclusion"] = f"Пропущено (недостаточно данных, размеры групп: {group1_size}, {group2_size} < {min_sample} рекомендуется)"
         logs.append(f"Skipped Mann-Whitney test for '{value_column}' by '{group_column}' (insufficient data)")
     else:
         try:
@@ -190,9 +190,9 @@ def perform_mann_whitney_test(df: pd.DataFrame, group_column: str, value_column:
             
             # Интерпретация результата
             if p_value > alpha:
-                test_result["conclusion"] = f"No significant difference (fail to reject H0 at alpha={alpha})"
+                test_result["conclusion"] = f"Статистически значимых различий нет (p > {alpha})"
             else:
-                test_result["conclusion"] = f"Significant difference (reject H0 at alpha={alpha})"
+                test_result["conclusion"] = f"Обнаружены статистически значимые различия (p <= {alpha})"
             
             logs.append(f"Performed Mann-Whitney test for '{value_column}' by '{group_column}': p={p_value:.4f}")
             

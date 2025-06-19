@@ -18,6 +18,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { useToast } from "@/components/ui/use-toast"
+import { useRouter } from "next/navigation"
 
 // Интерфейс для данных с бэкенда
 interface AnalysisRun {
@@ -30,6 +31,43 @@ interface AnalysisRun {
   independent_variable?: string | null;
 }
 
+const formatSelectedAnalyses = (analyses: string[], t: (key: string) => string): string => {
+  const analysisNames: { [key: string]: string } = {
+    descriptive_stats: t("descriptive_stats"),
+    normality_test: t("normality_test"),
+    regression: t("regression"),
+    wilcoxon_signed_rank: t("wilcoxon_signed_rank"),
+    mann_whitney: t("mann_whitney"),
+  };
+
+  const mainAnalyses = analyses
+    .filter(a => !a.includes(':'))
+    .map(a => analysisNames[a as keyof typeof analysisNames] || a);
+
+  // Special handling for Wilcoxon
+  if (analyses.includes('wilcoxon_signed_rank')) {
+    const var1 = analyses.find(a => a.startsWith('wilcoxon_var1:'))?.split(':')[1];
+    const var2 = analyses.find(a => a.startsWith('wilcoxon_var2:'))?.split(':')[1];
+    const index = mainAnalyses.indexOf(t('wilcoxon_signed_rank'));
+    if (index > -1 && var1 && var2) {
+      mainAnalyses[index] = `${t('wilcoxon_signed_rank')} (${var1}, ${var2})`;
+    }
+  }
+
+  // Special handling for Mann-Whitney
+  if (analyses.includes('mann_whitney')) {
+    const group = analyses.find(a => a.startsWith('mann_whitney_group:'))?.split(':')[1];
+    const value = analyses.find(a => a.startsWith('mann_whitney_value:'))?.split(':')[1];
+    const index = mainAnalyses.indexOf(t('mann_whitney'));
+    if (index > -1 && group && value) {
+      // e.g., "Тест Манна-Уитни (value по group)"
+      mainAnalyses[index] = `${t('mann_whitney')} (${value} по ${group})`;
+    }
+  }
+
+  return mainAnalyses.join(', ');
+};
+
 export default function DashboardPage() {
   const { t } = useTranslation()
   const { toast } = useToast()
@@ -38,6 +76,7 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState<boolean>(false)
   const [analysisToDelete, setAnalysisToDelete] = useState<number | null>(null)
+  const router = useRouter()
 
   useEffect(() => {
     fetchHistory();
@@ -46,17 +85,13 @@ export default function DashboardPage() {
   const fetchHistory = async () => {
     setLoading(true);
     setError(null);
-    console.log("[DashboardPage] Attempting to get token from localStorage with key 'authToken'.");
+
     const token = localStorage.getItem('authToken');
-    console.log("[DashboardPage] Token from localStorage (key 'authToken'):", token);
 
     if (!token) {
-      console.error("[DashboardPage] Token not found in localStorage (key 'authToken').");
-      // Возможно, здесь стоит перенаправить на страницу логина
-      // setLoading(false); // Убедитесь, что загрузка сбрасывается, если токена нет
+      router.push('/auth/login');
       return;
     }
-    console.log("[DashboardPage] Token found (key 'authToken'), proceeding to fetch history.");
 
     try {
       const response = await fetch('http://localhost:8080/api/analyses/history', {
@@ -208,7 +243,7 @@ export default function DashboardPage() {
                     <TableCell>{new Date(item.run_at).toLocaleDateString()}</TableCell>
                     <TableCell>{item.file_name}</TableCell>
                     <TableCell>
-                      {item.selected_analyses.map(analysis => t(analysis)).join(', ')}
+                      {formatSelectedAnalyses(item.selected_analyses, t)}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">

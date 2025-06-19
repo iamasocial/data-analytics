@@ -50,7 +50,21 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "User registered successfully", "user_id": user.ID, "email": user.Email})
+	// После успешной регистрации сразу генерируем токен
+	token, _, err := h.authService.LoginUser(c.Request.Context(), req.Email, req.Password)
+	if err != nil {
+		// Эта ошибка маловероятна, так как пользователь только что был создан,
+		// но на всякий случай обрабатываем.
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to log in after registration: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "User registered and logged in successfully",
+		"token":   token,
+		"user_id": user.ID,
+		"email":   user.Email,
+	})
 }
 
 // Login обрабатывает запрос на вход пользователя.

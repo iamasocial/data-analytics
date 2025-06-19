@@ -46,7 +46,7 @@ export default function Home() {
         </section>
         <section className="py-12 md:py-24 bg-white">
           <div className="container mx-auto px-4 md:px-6">
-            <div className="grid gap-6 lg:grid-cols-3 lg:gap-12">
+            <div className="grid gap-8 lg:flex lg:justify-center lg:gap-12">
               <div className="flex flex-col items-center space-y-4 text-center">
                 <div className="rounded-full bg-gray-100 p-4">
                   <svg
@@ -90,35 +90,8 @@ export default function Home() {
                   </svg>
                 </div>
                 <div className="space-y-2">
-                  <h3 className="text-xl font-bold">Интерактивная визуализация</h3>
+                  <h3 className="text-xl font-bold">Визуализация</h3>
                   <p className="text-gray-500">Анализируйте данные с помощью интерактивных графиков и таблиц</p>
-                </div>
-              </div>
-              <div className="flex flex-col items-center space-y-4 text-center">
-                <div className="rounded-full bg-gray-100 p-4">
-                  <svg
-                    className="h-6 w-6"
-                    fill="none"
-                    height="24"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    viewBox="0 0 24 24"
-                    width="24"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-                    <polyline points="14 2 14 8 20 8" />
-                    <path d="M8 13h2" />
-                    <path d="M8 17h2" />
-                    <path d="M14 13h2" />
-                    <path d="M14 17h2" />
-                  </svg>
-                </div>
-                <div className="space-y-2">
-                  <h3 className="text-xl font-bold">Экспорт результатов</h3>
-                  <p className="text-gray-500">Экспортируйте результаты анализа в PDF или Excel</p>
                 </div>
               </div>
             </div>

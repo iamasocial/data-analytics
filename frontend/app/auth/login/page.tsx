@@ -30,15 +30,16 @@ export default function LoginPage() {
   const router = useRouter()
   const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
   
   // При загрузке страницы входа очищаем все токены авторизации
   useEffect(() => {
-    // Очистка всех данных авторизации при открытии страницы входа
-    if (typeof window !== 'undefined') {
-      console.log("Страница входа: удаляем все данные авторизации");
-      clearAllAuthData();
-      console.log("Проверка очистки:", localStorage.getItem('authToken'));
-    }
+    // Очищаем localStorage при монтировании страницы входа
+    // Это гарантирует, что старые токены не останутся
+    localStorage.removeItem('authToken')
+    localStorage.removeItem('username')
   }, [])
 
   const form = useForm<LoginFormValues>({
@@ -85,6 +86,7 @@ export default function LoginPage() {
       // console.log("Login successful, token:", responseData.token);
       if (responseData.token) {
         localStorage.setItem("authToken", responseData.token);
+        localStorage.setItem("username", data.email);
         console.log("Login successful, token saved to localStorage:", responseData.token);
       } else {
         console.error("Login successful, but no token received from server.");

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import * as d3 from "d3"
+import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card"
 
 interface HistogramData {
   bins: number[]; // Bin edges (N+1)
@@ -33,23 +34,23 @@ export function DistributionChart({ data, variableName }: DistributionChartProps
 
   useEffect(() => {
     // Проверяем наличие данных нормальной кривой в props
-    console.log(`[DistributionChart] Props check for ${variableName}:`, {
-      data_keys: Object.keys(data || {}),
-      has_normal_curve_x: !!data?.normal_curve_x,
-      normal_curve_x_length: data?.normal_curve_x?.length || 0,
-      has_normal_curve_y: !!data?.normal_curve_y,
-      normal_curve_y_length: data?.normal_curve_y?.length || 0
-    });
+    // console.log(`[DistributionChart] Props check for ${variableName}:`, {
+    //   data_keys: Object.keys(data || {}),
+    //   has_normal_curve_x: !!data?.normal_curve_x,
+    //   normal_curve_x_length: data?.normal_curve_x?.length || 0,
+    //   has_normal_curve_y: !!data?.normal_curve_y,
+    //   normal_curve_y_length: data?.normal_curve_y?.length || 0
+    // });
     
     // Проверяем альтернативные имена полей через any
     const anyData = data as any;
     if (anyData) {
-      console.log(`[DistributionChart] Alternative field names check for ${variableName}:`, {
-        has_normalCurveX: !!anyData.normalCurveX,
-        normalCurveX_length: anyData.normalCurveX?.length || 0,
-        has_normalCurveY: !!anyData.normalCurveY,
-        normalCurveY_length: anyData.normalCurveY?.length || 0
-      });
+      // console.log(`[DistributionChart] Alternative field names check for ${variableName}:`, {
+      //   has_normalCurveX: !!anyData.normalCurveX,
+      //   normalCurveX_length: anyData.normalCurveX?.length || 0,
+      //   has_normalCurveY: !!anyData.normalCurveY,
+      //   normalCurveY_length: anyData.normalCurveY?.length || 0
+      // });
     }
     
     // Wait until mounted and basic data/ref checks pass
@@ -66,21 +67,21 @@ export function DistributionChart({ data, variableName }: DistributionChartProps
     }
     
     // Отладочный вывод для проверки данных
-    console.log(`[DistributionChart] Rendering chart for ${variableName}`);
-    console.log(`[DistributionChart] Bins: ${data.bins?.length || 0}, Frequencies: ${data.frequencies?.length || 0}`);
-    console.log(`[DistributionChart] Normal curve data:`, {
-      hasNormalCurveX: !!data.normal_curve_x && data.normal_curve_x.length > 0,
-      normalCurveXLength: data.normal_curve_x?.length || 0,
-      hasNormalCurveY: !!data.normal_curve_y && data.normal_curve_y.length > 0,
-      normalCurveYLength: data.normal_curve_y?.length || 0
-    });
+    // console.log(`[DistributionChart] Rendering chart for ${variableName}`);
+    // console.log(`[DistributionChart] Bins: ${data.bins?.length || 0}, Frequencies: ${data.frequencies?.length || 0}`);
+    // console.log(`[DistributionChart] Normal curve data:`, {
+    //   hasNormalCurveX: !!data.normal_curve_x && data.normal_curve_x.length > 0,
+    //   normalCurveXLength: data.normal_curve_x?.length || 0,
+    //   hasNormalCurveY: !!data.normal_curve_y && data.normal_curve_y.length > 0,
+    //   normalCurveYLength: data.normal_curve_y?.length || 0
+    // });
     
     // Дополнительная проверка для отладки
-    console.log("[DistributionChart] Full data object keys:", Object.keys(data));
+    // console.log("[DistributionChart] Full data object keys:", Object.keys(data));
     if (data.normal_curve_x) {
-      console.log("[DistributionChart] normal_curve_x is present");
+      // console.log("[DistributionChart] normal_curve_x is present");
     } else {
-      console.log("[DistributionChart] normal_curve_x is missing");
+      // console.log("[DistributionChart] normal_curve_x is missing");
     }
     
     if (!data.bins || data.bins.length < 2) {
@@ -131,14 +132,14 @@ export function DistributionChart({ data, variableName }: DistributionChartProps
     const containerWidth = svgRef.current.clientWidth;
     const containerHeight = svgRef.current.clientHeight > 0 ? svgRef.current.clientHeight : 300;
     if (containerWidth <= 0) {
-        console.warn("[DistributionChart] Container width is 0, skipping render.");
+        // console.warn("[DistributionChart] Container width is 0, skipping render.");
         return;
     } 
 
     const width = containerWidth - margin.left - margin.right;
     const height = containerHeight - margin.top - margin.bottom;
     if (width <= 0 || height <= 0) {
-        console.warn("[DistributionChart] Calculated chart dimensions are non-positive, skipping render.");
+        // console.warn("[DistributionChart] Calculated chart dimensions are non-positive, skipping render.");
         return;
     } 
 
@@ -230,15 +231,15 @@ export function DistributionChart({ data, variableName }: DistributionChartProps
     if (normalCurveX && normalCurveY && 
         normalCurveX.length > 0 && normalCurveY.length > 0) {
       
-      console.log(`[DistributionChart] Drawing normal curve for ${variableName} with ${normalCurveX.length} points`);
-      console.log(`[DistributionChart] X range: [${Math.min(...normalCurveX)}, ${Math.max(...normalCurveX)}]`);
-      console.log(`[DistributionChart] Y range: [${Math.min(...normalCurveY)}, ${Math.max(...normalCurveY)}]`);
+      // console.log(`[DistributionChart] Drawing normal curve for ${variableName} with ${normalCurveX.length} points`);
+      // console.log(`[DistributionChart] X range: [${Math.min(...normalCurveX)}, ${Math.max(...normalCurveX)}]`);
+      // console.log(`[DistributionChart] Y range: [${Math.min(...normalCurveY)}, ${Math.max(...normalCurveY)}]`);
       
       // Вывод первых 5 точек для отладки
-      console.log("[DistributionChart] First 5 points:", normalCurveX.slice(0, 5).map((x: number, i: number) => ({
-        x: x,
-        y: normalCurveY?.[i] || 0
-      })));
+      // console.log("[DistributionChart] First 5 points:", normalCurveX.slice(0, 5).map((x: number, i: number) => ({
+      //   x: x,
+      //   y: normalCurveY?.[i] || 0
+      // })));
       
       // Создаем массив точек для кривой
       const curvePoints = normalCurveX.map((x: number, i: number) => ({
@@ -260,9 +261,9 @@ export function DistributionChart({ data, variableName }: DistributionChartProps
           .attr("stroke-width", 2)
           .attr("d", line);
           
-        console.log(`[DistributionChart] Normal curve path created: ${path.attr("d")}`);
+        // console.log(`[DistributionChart] Normal curve path created: ${path.attr("d")}`);
       } catch (error) {
-        console.error(`[DistributionChart] Error drawing normal curve:`, error);
+        // console.error(`[DistributionChart] Error drawing normal curve:`, error);
       }
         
       // Добавляем легенду

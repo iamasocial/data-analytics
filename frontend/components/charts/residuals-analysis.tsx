@@ -1,8 +1,9 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import React, { useEffect, useRef, useState } from "react"
 import * as d3 from "d3"
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card"
+import { format } from "d3-format"
 
 export interface RegressionCoefficient {
   variable_name: string;
@@ -54,12 +55,6 @@ export function ResidualsAnalysis({
   const qqPlotRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
-    console.log("PROPS RECEIVED BY ResidualsAnalysis component:", {
-      residuals, 
-      shapiroTest, 
-      histogram, 
-      qqPlot
-    });
     setIsMounted(true);
   }, []);
 
@@ -79,58 +74,17 @@ export function ResidualsAnalysis({
   useEffect(() => {
     if (!isMounted) return;
     
-    console.log("ResidualsAnalysis useEffect", {
-      isMounted,
-      residualsLength: residuals?.length || 0,
-      hasShapiroTest: !!normalizedShapiroTest,
-      shapiroTestDetails: normalizedShapiroTest ? {
-        statistic: normalizedShapiroTest.statistic,
-        p_value: normalizedShapiroTest.p_value,
-        is_normal: normalizedShapiroTest.is_normal
-      } : null,
-      hasHistogram: !!(histogram?.bins?.length && histogram?.frequencies?.length),
-      histogramDetails: histogram ? {
-        binsLength: histogram.bins?.length || 0,
-        frequenciesLength: histogram.frequencies?.length || 0
-      } : null,
-      hasQQPlot: !!(normalizedQQPlot?.theoretical_quantiles?.length && normalizedQQPlot?.sample_quantiles?.length),
-      qqPlotDetails: normalizedQQPlot ? {
-        theoreticalQuantilesLength: normalizedQQPlot.theoretical_quantiles?.length || 0,
-        sampleQuantilesLength: normalizedQQPlot.sample_quantiles?.length || 0
-      } : null
-    });
-    
-    // Проверка для гистограммы
     if (histogram && histogram.bins && histogram.bins.length > 0 && 
         histogram.frequencies && histogram.frequencies.length > 0 && 
         histogramRef.current) {
       renderHistogram();
-    } else {
-      console.warn("Cannot render histogram due to missing or invalid data", { 
-        histogram, 
-        hasBins: !!histogram?.bins, 
-        binsLength: histogram?.bins?.length || 0,
-        hasFrequencies: !!histogram?.frequencies,
-        frequenciesLength: histogram?.frequencies?.length || 0,
-        hasRef: !!histogramRef.current
-      });
     }
     
-    // Проверка для QQ-графика
     if (normalizedQQPlot && 
         normalizedQQPlot.theoretical_quantiles && normalizedQQPlot.theoretical_quantiles.length > 0 && 
         normalizedQQPlot.sample_quantiles && normalizedQQPlot.sample_quantiles.length > 0 && 
         qqPlotRef.current) {
       renderQQPlot();
-    } else {
-      console.warn("Cannot render QQ-plot due to missing or invalid data", {
-        normalizedQQPlot,
-        hasTheoreticalQuantiles: !!normalizedQQPlot?.theoretical_quantiles,
-        theoreticalQuantilesLength: normalizedQQPlot?.theoretical_quantiles?.length || 0,
-        hasSampleQuantiles: !!normalizedQQPlot?.sample_quantiles,
-        sampleQuantilesLength: normalizedQQPlot?.sample_quantiles?.length || 0,
-        hasRef: !!qqPlotRef.current
-      });
     }
   }, [isMounted, residuals, histogram, normalizedQQPlot]);
 
@@ -215,7 +169,6 @@ export function ResidualsAnalysis({
         normalizedQQPlot.theoretical_quantiles.length === 0 || 
         normalizedQQPlot.sample_quantiles.length === 0 ||
         !qqPlotRef.current) {
-      console.log("Выход из renderQQPlot из-за невыполнения условий");
       return;
     }
     
@@ -273,10 +226,38 @@ export function ResidualsAnalysis({
       .style("font-weight", "bold")
       .text("QQ-график (проверка нормальности)");
       
-    const xDomain = x.domain();
-    const yDomain = y.domain();
-    const minBoth = Math.min(xDomain[0], yDomain[0]);
-    const maxBoth = Math.max(xDomain[1], yDomain[1]);
+    // Рассчитываем и рисуем более подходящую эталонную линию,
+    // проходящую через первый и третий квартили данных.
+    // Это делает визуальную оценку более интуитивной.
+    const sampleQ = normalizedQQPlot.sample_quantiles;
+    const theoreticalQ = normalizedQQPlot.theoretical_quantiles;
+
+    const q1Sample = d3.quantile(sampleQ, 0.25);
+    const q3Sample = d3.quantile(sampleQ, 0.75);
+    const q1Theo = d3.quantile(theoreticalQ, 0.25);
+    const q3Theo = d3.quantile(theoreticalQ, 0.75);
+
+    if (q1Sample !== undefined && q3Sample !== undefined && q1Theo !== undefined && q3Theo !== undefined && q3Theo !== q1Theo) {
+        const slope = (q3Sample - q1Sample) / (q3Theo - q1Theo);
+        const intercept = q1Sample - slope * q1Theo;
+
+        const xMin = d3.min(theoreticalQ);
+        const xMax = d3.max(theoreticalQ);
+
+        if (xMin !== undefined && xMax !== undefined) {
+            const lineStart = { x: xMin, y: slope * xMin + intercept };
+            const lineEnd = { x: xMax, y: slope * xMax + intercept };
+
+            svg.append("line")
+              .attr("x1", x(lineStart.x))
+              .attr("y1", y(lineStart.y))
+              .attr("x2", x(lineEnd.x))
+              .attr("y2", y(lineEnd.y))
+              .attr("stroke", "#94a3b8")
+              .attr("stroke-width", 2)
+              .attr("stroke-dasharray", "6,3");
+        }
+    }
       
     svg.append("rect")
       .attr("x", 0)
@@ -286,29 +267,20 @@ export function ResidualsAnalysis({
       .attr("fill", "#f8fafc")
       .attr("opacity", 0.5);
       
-    svg.append("line")
-      .attr("x1", x(minBoth))
-      .attr("y1", y(minBoth))
-      .attr("x2", x(maxBoth))
-      .attr("y2", y(maxBoth))
-      .attr("stroke", "#94a3b8")
-      .attr("stroke-width", 2)
-      .attr("stroke-dasharray", "6,3");
-      
     svg.selectAll("circle")
-      .data(normalizedQQPlot.theoretical_quantiles.map((q, i) => ({ 
-        theoretical: q, 
-        sample: normalizedQQPlot.sample_quantiles[i] 
-      })))
-      .enter()
-      .append("circle")
-      .attr("cx", d => x(d.theoretical))
-      .attr("cy", d => y(d.sample))
-      .attr("r", 4)
-      .attr("fill", "#6366f1")
-      .attr("stroke", "#4338ca")
-      .attr("stroke-width", 1)
-      .attr("opacity", 0.8);
+       .data(normalizedQQPlot.theoretical_quantiles.map((q, i) => ({ 
+         theoretical: q, 
+         sample: normalizedQQPlot.sample_quantiles[i] 
+       })))
+       .enter()
+       .append("circle")
+       .attr("cx", d => x(d.theoretical))
+       .attr("cy", d => y(d.sample))
+       .attr("r", 4)
+       .attr("fill", "#6366f1")
+       .attr("stroke", "#4338ca")
+       .attr("stroke-width", 1)
+       .attr("opacity", 0.8);
   };
   
   const getSignificanceStars = (pValue: number): string => {
@@ -321,6 +293,13 @@ export function ResidualsAnalysis({
   const isNonlinearModel = title && (title.includes("Trigonometric") || title.includes("Тригонометрическ") || title.includes("Sigmoid") || title.includes("Сигмоидн"));
   
   const hasResidualsData = (residuals && residuals.length > 0) || normalizedShapiroTest || histogram || normalizedQQPlot;
+
+  const formatPValue = (pValue: number) => {
+    if (pValue < 0.001) {
+      return format(".2e")(pValue);
+    }
+    return pValue.toFixed(3);
+  };
 
   return (
     <Card className="w-full">
@@ -335,7 +314,7 @@ export function ResidualsAnalysis({
               <div className="mb-6 p-4 border rounded-md">
                 <h4 className="text-lg font-medium mb-2">Тест Шапиро-Уилка</h4>
                 <p className="text-sm mb-1">Статистика: {normalizedShapiroTest.statistic.toFixed(4)}</p>
-                <p className="text-sm mb-1">p-значение: {normalizedShapiroTest.p_value.toPrecision(4)}</p>
+                <p className="text-sm mb-1">p-значение: {formatPValue(normalizedShapiroTest.p_value)}</p>
                 <p className="text-sm font-semibold">
                   Вывод: {normalizedShapiroTest.is_normal 
                     ? "Остатки имеют нормальное распределение (p > 0.05)" 

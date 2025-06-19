@@ -255,6 +255,10 @@ const translations: Translations = {
     ru: "Непараметрический тест для сравнения парных выборок",
     en: "Nonparametric test for comparing paired samples"
   },
+  wilcoxon_signed_rank: {
+    ru: "Тест знаковых рангов Вилкоксона",
+    en: "Wilcoxon Signed Rank Test"
+  },
   mann_whitney_test: {
     ru: "Тест Манна-Уитни (U-тест)",
     en: "Mann-Whitney U Test"
@@ -262,6 +266,10 @@ const translations: Translations = {
   mann_whitney_description: {
     ru: "Непараметрический тест для сравнения двух независимых выборок",
     en: "Nonparametric test for comparing two independent samples"
+  },
+  mann_whitney: {
+    ru: "Тест Манна-Уитни (U-тест)",
+    en: "Mann-Whitney U Test"
   },
   no_wilcoxon_signed_rank_results: {
     ru: "Результаты теста знаковых рангов Вилкоксона отсутствуют",
@@ -330,6 +338,335 @@ const translations: Translations = {
   p_value_header: {
     ru: "P-значение",
     en: "P-value"
+  },
+  variable: {
+    ru: "Переменная",
+    en: "Variable"
+  },
+  count: {
+    ru: "Количество",
+    en: "Count"
+  },
+  mean: {
+    ru: "Среднее",
+    en: "Mean"
+  },
+  median: {
+    ru: "Медиана",
+    en: "Median"
+  },
+  mode: {
+    ru: "Мода",
+    en: "Mode"
+  },
+  stdDev: {
+    ru: "Стд. откл.",
+    en: "Std. Dev."
+  },
+  min: {
+    ru: "Мин.",
+    en: "Min"
+  },
+  max: {
+    ru: "Макс.",
+    en: "Max"
+  },
+  q1: {
+    ru: "Q1",
+    en: "Q1"
+  },
+  q3: {
+    ru: "Q3",
+    en: "Q3"
+  },
+  iqr: {
+    ru: "IQR",
+    en: "IQR"
+  },
+  variationCoefficient: {
+    ru: "Коэф. вариации",
+    en: "Coeff. of Variation"
+  },
+  skewness: {
+    ru: "Асимметрия",
+    en: "Skewness"
+  },
+  kurtosis: {
+    ru: "Эксцесс",
+    en: "Kurtosis"
+  },
+  unique: {
+    ru: "Уникальные",
+    en: "Unique"
+  },
+  multiple: {
+    ru: "Несколько мод",
+    en: "Multiple modes"
+  },
+  histograms: {
+    ru: "Гистограммы",
+    en: "Histograms"
+  },
+  confidenceIntervals: {
+    ru: "Доверительные интервалы",
+    en: "Confidence Intervals"
+  },
+  confidenceLevel: {
+    ru: "Уровень доверия",
+    en: "Confidence Level"
+  },
+  interval: {
+    ru: "Интервал",
+    en: "Interval"
+  },
+  standardError: {
+    ru: "Стандартная ошибка",
+    en: "Standard Error"
+  },
+  normalityTests: {
+    ru: "Тесты на нормальность",
+    en: "Normality Tests"
+  },
+  shapiroWilkTest: {
+    ru: "Тест Шапиро-Уилка",
+    en: "Shapiro-Wilk Test"
+  },
+  nonNormalDistribution: {
+    ru: "Распределение отличается от нормального",
+    en: "Distribution is not normal"
+  },
+  normalDistribution: {
+    ru: "Нормальное распределение",
+    en: "Normal distribution"
+  },
+  chiSquareTest: {
+    ru: "Тест Хи-квадрат",
+    en: "Chi-Square Test"
+  },
+  degreesOfFreedom: {
+    ru: "Степени свободы",
+    en: "Degrees of Freedom"
+  },
+  intervals: {
+    ru: "Интервалы",
+    en: "Intervals"
+  },
+  histogramsWithNormalCurve: {
+    ru: "Гистограммы с кривой нормального распределения",
+    en: "Histograms with Normal Curve"
+  },
+  noData: {
+    ru: "Нет данных",
+    en: "No data"
+  },
+  noDataForHistogram: {
+    ru: "Нет данных для гистограммы",
+    en: "No data for histogram"
+  },
+  noDataForHistograms: {
+    ru: "Нет данных для гистограмм",
+    en: "No data for histograms"
+  },
+  noDataForConfidenceIntervals: {
+    ru: "Нет данных для доверительных интервалов",
+    en: "No data for confidence intervals"
+  },
+  selectFiles: {
+    ru: "Выбрать файлы",
+    en: "Select Files"
+  },
+  selectedFiles: {
+    ru: "Выбранные файлы",
+    en: "Selected Files"
+  },
+  clearAll: {
+    ru: "Очистить все",
+    en: "Clear All"
+  },
+  selectAnalyses: {
+    ru: "Выберите анализы",
+    en: "Select Analyses"
+  },
+  descriptiveStats: {
+    ru: "Описательная статистика",
+    en: "Descriptive Statistics"
+  },
+  normalityTest: {
+    ru: "Проверка нормальности",
+    en: "Normality Test"
+  },
+  wilcoxonSignedRankTest: {
+    ru: "Тест знаковых рангов Вилкоксона",
+    en: "Wilcoxon Signed Rank Test"
+  },
+  mannWhitneyTest: {
+    ru: "Тест Манна-Уитни",
+    en: "Mann-Whitney U Test"
+  },
+  regressionVariables: {
+    ru: "Переменные для регрессии",
+    en: "Regression Variables"
+  },
+  dependentVariableY: {
+    ru: "Зависимая переменная (Y)",
+    en: "Dependent Variable (Y)"
+  },
+  independentVariableX: {
+    ru: "Независимая переменная (X)",
+    en: "Independent Variable (X)"
+  },
+  uploadComplete: {
+    ru: "Загрузка завершена",
+    en: "Upload Complete"
+  },
+  uploadSuccessMessage: {
+    ru: "Файлы успешно загружены и отправлены на анализ",
+    en: "Files successfully uploaded and sent for analysis"
+  },
+  uploadAndAnalyze: {
+    ru: "Загрузить и анализировать",
+    en: "Upload and Analyze"
+  },
+  "results.title": {
+    ru: "Результаты анализа",
+    en: "Analysis Results"
+  },
+  regressionAnalysis: {
+    ru: "Регрессионный анализ",
+    en: "Regression Analysis"
+  },
+  residualsAnalysis: {
+    ru: "Анализ остатков",
+    en: "Residuals Analysis"
+  },
+  regressionEquation: {
+    ru: "Уравнение регрессии",
+    en: "Regression Equation"
+  },
+  // Regression Table Translations
+  modelSummary: {
+    ru: "Сводка по модели",
+    en: "Model Summary"
+  },
+  parameter: {
+    ru: "Параметр",
+    en: "Parameter"
+  },
+  value: {
+    ru: "Значение",
+    en: "Value"
+  },
+  stdError: {
+    ru: "Станд. ошибка",
+    en: "Std. Error"
+  },
+  tStatistic: {
+    ru: "t-статистика",
+    en: "t-statistic"
+  },
+  pValue: {
+    ru: "P-значение",
+    en: "P-value"
+  },
+  confidenceInterval: {
+    ru: "95% довер. интервал",
+    en: "95% Conf. Interval"
+  },
+  na: {
+    ru: "Неприменимо",
+    en: "N/A"
+  },
+  intercept: {
+    ru: "Константа (intercept)",
+    en: "Intercept"
+  },
+  fStatisticAndPValue: {
+    ru: "F-статистика (и p-значение)",
+    en: "F-statistic (and p-value)"
+  },
+  modelComparison: {
+    ru: "Сравнение моделей",
+    en: "Model Comparison"
+  },
+  modelType: {
+    ru: "Тип модели",
+    en: "Model Type"
+  },
+  rSquared: {
+    ru: "R²",
+    en: "R²"
+  },
+  adjustedRSquared: {
+    ru: "Скорр. R²",
+    en: "Adj. R²"
+  },
+  fStatistic: {
+    ru: "F-статистика",
+    en: "F-statistic"
+  },
+  sse: {
+    ru: "SSE",
+    en: "SSE"
+  },
+  uploadSubtitle: {
+    ru: "Загрузите файл для выполнения статистического анализа.",
+    en: "Upload a file to perform statistical analysis."
+  },
+  dropFilesHere: {
+    ru: "Отпустите файлы для загрузки",
+    en: "Drop files here to upload"
+  },
+  removeFile: {
+    ru: "Удалить файл",
+    en: "Remove file"
+  },
+  selectVariable: {
+    ru: "Выберите переменную",
+    en: "Select a variable"
+  },
+  wilcoxonSignedRankVariables: {
+    ru: "Переменные для теста знаковых рангов Вилкоксона",
+    en: "Variables for Wilcoxon Signed Rank Test"
+  },
+  firstVariable: {
+    ru: "Первая переменная (до)",
+    en: "First Variable (before)"
+  },
+  secondVariable: {
+    ru: "Вторая переменная (после)",
+    en: "Second Variable (after)"
+  },
+  wilcoxonSignedRankHint: {
+    ru: "Выберите две связанные переменные (например, измерения до и после).",
+    en: "Select two related variables (e.g., before and after measurements)."
+  },
+  mannWhitneyVariables: {
+    ru: "Переменные для теста Манна-Уитни",
+    en: "Variables for Mann-Whitney Test"
+  },
+  valuesToCompare: {
+    ru: "Переменная со значениями",
+    en: "Variable with values"
+  },
+  mannWhitneyHint: {
+    ru: "Выберите колонку с двумя группами и колонку со значениями для сравнения.",
+    en: "Select a column with two groups and a column with values to compare."
+  },
+  uploading: {
+    ru: "Загрузка",
+    en: "Uploading"
+  },
+  uploadFailedMessage: {
+    ru: "Не удалось загрузить файл. Пожалуйста, попробуйте еще раз.",
+    en: "Failed to upload file. Please try again."
+  },
+  noWilcoxonTestsPerformed: {
+    ru: "Тесты не выполнялись или не дали результатов",
+    en: "Tests were not performed or yielded no results"
+  },
+  variableToCompare: {
+    ru: "Переменная для сравнения",
+    en: "Variable to Compare"
   }
 }
 

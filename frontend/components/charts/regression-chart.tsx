@@ -96,27 +96,23 @@ export function calculateY(x: number, modelType: string, coefficients: {variable
       return a * x * x + b * x + c_quad;
     }
     case "Logarithmic": {
+      // y = a + b * ln(x)
+      if (x <= 0) return NaN; // Логарифм не определен для x <= 0, возвращаем NaN
+
       const coeff_a = coefficients.find(c => c.variable_name === "a" || c.variableName === "a")?.coefficient;
       const coeff_b = coefficients.find(c => c.variable_name === "b" || c.variableName === "b")?.coefficient;
 
       if (coeff_a === undefined || coeff_b === undefined) {
-        console.warn(`Logarithmic regression: coefficients 'a' (${coeff_a}) or 'b' (${coeff_b}) not found. Coeffs:`, coefficients);
-        return NaN; // Return NaN if coefficients are missing, to filter out later
-      }
-      // y = a + b * ln(x)
-      if (x <= 0) {
-        // Python backend for log_func uses np.maximum(x, 1e-10).
-        // Math.log(0) is -Infinity. Math.log(negative) is NaN.
-        // To align with backend's avoidance of true zero/negative, we can return NaN or a calculated value for small x.
-        // For simplicity and to allow filtering of invalid points, returning NaN is safer here.
         return NaN; 
       }
       return coeff_a + coeff_b * Math.log(x);
     }
-    case "Exponential":
-      // y = a * e^(b*x)
-      // В этом случае intercept это ln(a), поэтому a = e^intercept
-      return Math.exp(intercept) * Math.exp(slope * x);
+    case "Exponential": {
+        // y = a * e^(b*x)
+        const a_exp = coefficients.find(c => c.variable_name === "a" || c.variableName === "a")?.coefficient ?? 0;
+        const b_exp = coefficients.find(c => c.variable_name === "b" || c.variableName === "b")?.coefficient ?? 0;
+        return a_exp * Math.exp(b_exp * x);
+    }
     case "Power":
       // y = a * x^b
       if (x <= 0) return NaN; // Power function undefined for x <= 0
@@ -179,11 +175,11 @@ export function RegressionChart({ data, models, dependentVar, independentVar, he
       const graphHeight = chartHeight - margin.top - margin.bottom;
       
       // Debug dimensions
-      console.log("[RegressionChart] Dimensions:", { 
-        containerWidth, 
-        chartWidth: width, 
-        chartHeight 
-      });
+      // console.log("[RegressionChart] Dimensions:", { 
+      //   containerWidth, 
+      //   chartWidth: width, 
+      //   chartHeight 
+      // });
       
       // Create SVG
       const svg = d3.select(svgRef.current)
@@ -191,6 +187,15 @@ export function RegressionChart({ data, models, dependentVar, independentVar, he
         .attr("height", chartHeight)
         .append("g")
         .attr("transform", `translate(${margin.left},${margin.top})`);
+  
+      // Define a clip path
+      svg.append("defs").append("clipPath")
+        .attr("id", "chart-area-clip")
+        .append("rect")
+        .attr("x", 0)
+        .attr("y", 0)
+        .attr("width", width)
+        .attr("height", graphHeight);
   
       // Set up scales
       const xMin = d3.min(data, d => d.x) || 0;
@@ -206,7 +211,7 @@ export function RegressionChart({ data, models, dependentVar, independentVar, he
 
       if (globalYDomain && globalYDomain.length === 2) {
         yScale.domain(globalYDomain).range([graphHeight, 0]);
-        console.log("[RegressionChart] Using globalYDomain:", globalYDomain);
+        // console.log("[RegressionChart] Using globalYDomain:", globalYDomain);
       } else {
         // Fallback to existing dynamic Y scale calculation if globalYDomain is not provided
         // Pre-calculate regression y-values to determine proper y-axis scale
@@ -233,11 +238,11 @@ export function RegressionChart({ data, models, dependentVar, independentVar, he
         // Add padding to Y domain
         const finalYPadding = (finalYMax - finalYMin) * 0.1;
         
-        console.log("[RegressionChart] Dynamically calculated Y-axis range:", {
-          dataRange: [yMin, yMax],
-          withRegression: [actualYMin, actualYMax],
-          final: [finalYMin - finalYPadding, finalYMax + finalYPadding]
-        });
+        // console.log("[RegressionChart] Dynamically calculated Y-axis range:", {
+        //   dataRange: [yMin, yMax],
+        //   withRegression: [actualYMin, actualYMax],
+        //   final: [finalYMin - finalYPadding, finalYMax + finalYPadding]
+        // });
         yScale.domain([finalYMin - finalYPadding, finalYMax + finalYPadding]).range([graphHeight, 0]);
       }
   
@@ -246,7 +251,7 @@ export function RegressionChart({ data, models, dependentVar, independentVar, he
         
       if (globalXDomain && globalXDomain.length === 2) {
         xScale.domain(globalXDomain);
-        console.log("[RegressionChart] Using globalXDomain:", globalXDomain);
+        // console.log("[RegressionChart] Using globalXDomain:", globalXDomain);
       } else {
         xScale.domain([xMin - xPadding, xMax + xPadding]);
       }
@@ -261,17 +266,19 @@ export function RegressionChart({ data, models, dependentVar, independentVar, he
   
       // Axis Labels
       svg.append("text")
-         .attr("text-anchor", "middle")
-         .attr("x", width / 2)
-         .attr("y", graphHeight + margin.bottom - 10)
-         .text(independentVar);
+         .attr("text-anchor", "end")
+         .attr("x", width / 2 + margin.left)
+         .attr("y", graphHeight + margin.top)
+         .text(independentVar)
+         .style("font-size", "14px");
   
       svg.append("text")
-         .attr("text-anchor", "middle")
+         .attr("text-anchor", "end")
          .attr("transform", "rotate(-90)")
-         .attr("y", -margin.left + 15)
+         .attr("y", -margin.left + 20)
          .attr("x", -graphHeight / 2)
-         .text(dependentVar);
+         .text(dependentVar)
+         .style("font-size", "14px");
   
       // Draw Scatter Plot
       svg.selectAll("circle")
@@ -286,88 +293,39 @@ export function RegressionChart({ data, models, dependentVar, independentVar, he
          .style("stroke", "white")
          .style("stroke-width", 1);
   
-      // Draw Regression Lines
+      // Define colors for regression lines
       const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
-      const xPoints = d3.range(xMin - xPadding, xMax + xPadding, (xMax - xMin) / 200);
-      
-      models.forEach((model, index) => {
-        const modelType = model.type;
-        const color = colorScale(modelType);
-        
-        // Calculate y values
-        const yPoints = xPoints.map(x => {
-          return calculateY(x, modelType, model.coefficients);
-        });
-        
-        // Отладка: проверяем значения y
-        console.log(`Regression ${modelType} - Points sample:`, 
-          xPoints.slice(0, 5).map((x, i) => ({ x, y: yPoints[i] })));
-        
-        // Create line data
-        const lineData = xPoints.map((x, i) => ({
-          x: x,
-          y: yPoints[i]
-        }))
-        .filter(d => {
-          const isValid = !isNaN(d.y) && isFinite(d.y);
-          return isValid;
-        });
-        
-        // Отладка: количество точек после фильтрации
-        console.log(`Regression ${modelType} - Valid points: ${lineData.length}/${xPoints.length}`);
-        
-        // Если линия пустая, пропускаем отрисовку
-        if (lineData.length === 0) {
-          console.warn(`Regression ${modelType} - No valid points to draw line`);
-          return;
-        }
-        
-        // Если у нас есть значения, которые слишком сильно выходят за пределы графика,
-        // мы ограничиваем их для лучшего отображения
-        const yExtent = d3.extent(lineData, d => d.y) as [number, number];
-        const currentYScaleDomain = yScale.domain(); // Получаем текущий домен шкалы Y
-        
-        // Проверяем, есть ли экстремальные значения, выходящие далеко за пределы графика
-        const hasExtremeValues = 
-          yExtent[0] < currentYScaleDomain[0] - (currentYScaleDomain[1] - currentYScaleDomain[0]) * 0.1 || 
-          yExtent[1] > currentYScaleDomain[1] + (currentYScaleDomain[1] - currentYScaleDomain[0]) * 0.1;
-        
-        console.log(`Regression ${modelType} - Y extent:`, yExtent, 
-          `Y Scale Domain: ${currentYScaleDomain[0]}-${currentYScaleDomain[1]}`, 
-          `Has extreme values: ${hasExtremeValues}`);
-        
-        // Ограничиваем значения линии регрессии, чтобы они не выходили слишком далеко за пределы видимой области графика
-        // Используем currentYScaleDomain для определения границ
-        const limitedLineData = lineData.map(d => ({
-          x: d.x,
-          y: Math.max(currentYScaleDomain[0], Math.min(d.y, currentYScaleDomain[1]))
-        }));
-        
-        // Draw line
-        const line = d3.line<{x: number, y: number}>()
+
+      // Add regression lines
+      models.forEach((model, i) => {
+        const line = d3.line<DataPoint>()
           .x(d => xScale(d.x))
           .y(d => yScale(d.y))
-          .curve(d3.curveMonotoneX);
-        
+          .defined(d => !isNaN(d.y) && isFinite(d.y)); // Skip points where y is NaN or Infinity
+
+        // Generate points for the line over the scale's domain
+        const domain = xScale.domain();
+
+        // For Logarithmic and Power models, start drawing from a small positive number to avoid errors
+        const startX = (model.type === 'Logarithmic' || model.type === 'Power') 
+            ? Math.max(domain[0], 0.001) 
+            : domain[0];
+
+        const numPoints = 200;
+        const xPoints = Array.from({length: numPoints}, (_, j) => startX + j * (domain[1] - startX) / (numPoints - 1));
+
+        const lineData = xPoints.map(x => ({
+          x: x,
+          y: calculateY(x, model.type, model.coefficients)
+        }));
+
         svg.append("path")
-          .datum(limitedLineData)
+          .datum(lineData)
           .attr("fill", "none")
-          .attr("stroke", color)
-          .attr("stroke-width", 3)
-          .attr("d", line);
-        
-        // Add to legend
-        svg.append("circle")
-          .attr("cx", width + 10)
-          .attr("cy", 20 + index * 25)
-          .attr("r", 6)
-          .style("fill", color);
-        
-        svg.append("text")
-          .attr("x", width + 20)
-          .attr("y", 20 + index * 25)
-          .attr("alignment-baseline", "middle")
-          .text(`R² = ${model.r_squared.toFixed(3)}`);
+          .attr("stroke", colorScale(i.toString()))
+          .attr("stroke-width", 2.5)
+          .attr("d", line)
+          .attr("clip-path", "url(#chart-area-clip)"); // Apply the clip path
       });
     }
 

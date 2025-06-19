@@ -1,0 +1,25 @@
+Результаты платформы:
+MannWhitney_Independent_Significant.csv
+Тест Манна-Уитни
+groupColumn	valueColumn	Группа 1 / Группа 2	groupSizes	groupMedians	Статистика	P-значение	Вывод
+group	    value	    A       /  B	    20 / 20	    10.811 / 15.201	37.0000	    0.0000	    Significant difference (reject H0 at alpha=0.05)
+
+MannWhitney_Indep_NoDiff.csv
+Тест Манна-Уитни
+groupColumn	valueColumn	Группа 1 / Группа 2	groupSizes	groupMedians	Статистика	P-значение	Вывод
+group	    value	    A        / B	    20 / 20	    11.428 / 11.609	197.0000	0.9461	    No significant difference (fail to reject H0 at alpha=0.05)
+
+Результаты скрипта:
+📄 Анализ файла: ../datasets/MannWhitney_Independent_Significant.csv
+Группы: A vs B
+Медианы: A = 10.811, B = 15.201
+U-статистика: 37.000
+P-value: 0.0000
+Вывод: ✅ Есть значимое различие
+
+📄 Анализ файла: ../datasets/MannWhitney_Indep_NoDiff.csv
+Группы: A vs B
+Медианы: A = 11.428, B = 11.609
+U-статистика: 197.000
+P-value: 0.9461
+Вывод: ℹ️ Нет статистически значимого различия

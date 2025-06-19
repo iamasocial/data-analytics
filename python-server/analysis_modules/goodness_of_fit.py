@@ -80,52 +80,43 @@ def perform_chi_square_test(df: pd.DataFrame, distribution: str = 'norm', alpha:
             # Убедимся, что частоты не нулевые и достаточно большие
             expected_freq = np.maximum(expected_freq, 1e-8) # Заменяем нули малым числом
 
-             # Объединяем бины с ожидаемой частотой < min_expected_freq
-            i = 0
-            while i < len(expected_freq):
-                if expected_freq[i] < min_expected_freq:
-                    if i == 0:
-                        # Объединяем с правым соседом
-                        if len(expected_freq) > 1:
-                            expected_freq[1] += expected_freq[0]
-                            observed_freq[1] += observed_freq[0]
-                            expected_freq = expected_freq[1:]
-                            observed_freq = observed_freq[1:]
-                            num_bins -= 1
-                        else: # Невозможно объединить, слишком мало бинов
-                             break # Прерываем объединение
-                    else:
-                        # Объединяем с левым соседом
-                        expected_freq[i-1] += expected_freq[i]
-                        observed_freq[i-1] += observed_freq[i]
-                        expected_freq = np.delete(expected_freq, i)
-                        observed_freq = np.delete(observed_freq, i)
-                        num_bins -= 1
-                        continue # Перепроверяем объединенный бин
-                i += 1
+            # Объединяем бины с ожидаемой частотой < min_expected_freq
+            obs_final = []
+            exp_final = []
+            buffer_obs = 0
+            buffer_exp = 0
+
+            for o, e in zip(observed_freq, expected_freq):
+                buffer_obs += o
+                buffer_exp += e
+                if buffer_exp >= min_expected_freq:
+                    obs_final.append(buffer_obs)
+                    exp_final.append(buffer_exp)
+                    buffer_obs = 0
+                    buffer_exp = 0
+            
+            # Добавляем оставшийся буфер к последнему бину
+            if buffer_exp > 0:
+                if len(obs_final) > 0:
+                    obs_final[-1] += buffer_obs
+                    exp_final[-1] += buffer_exp
+                else:
+                    # Этот случай маловероятен при n>=20, но для надежности
+                    obs_final.append(buffer_obs)
+                    exp_final.append(buffer_exp)
+            
+            observed_freq = np.array(obs_final)
+            expected_freq = np.array(exp_final)
             
             # Перепроверка после объединения
-            if np.any(expected_freq < min_expected_freq) or len(expected_freq) < 2:
-                 test_result["conclusion"] = f"Skipped (Could not ensure expected freq >= {min_expected_freq})"
-                 logs.append(f"Skipped Chi-square test for '{col_name}' (low expected frequencies).")
+            if len(expected_freq) < 2: # Для ddof=2 нужно хотя бы 4 группы (4-1-2=1 dof), но для самого теста хотя бы 2
+                 test_result["conclusion"] = f"Skipped (Not enough bins after merging)"
+                 logs.append(f"Skipped Chi-square test for '{col_name}' (bins < 2 after merging).")
                  results.append(test_result)
                  continue
             
-            # Убедимся, что суммы совпадают из-за возможных ошибок округления
-            sum_obs = np.sum(observed_freq)
-            sum_exp = np.sum(expected_freq)
-            if sum_obs > 0 and not np.isclose(sum_obs, sum_exp): # Проверяем, что sum_obs > 0
-                logs.append(f"Normalizing expected frequencies for '{col_name}' (Obs Sum: {sum_obs}, Exp Sum Before: {sum_exp:.4f}).")
-                expected_freq = expected_freq * (sum_obs / sum_exp)
-                # Убедимся, что частоты не отрицательные после нормализации
-                expected_freq = np.maximum(expected_freq, 1e-9) 
-                sum_exp_after = np.sum(expected_freq)
-                logs.append(f"Expected frequencies normalized. Exp Sum After: {sum_exp_after:.4f}. Relative Diff: {abs(sum_obs - sum_exp_after) / sum_obs if sum_obs else 0:.2e}")
-
             # 4. Выполняем тест Хи-квадрат
             ddof = 2 # Оценили 2 параметра: mean, std_dev
-            degrees_of_freedom = num_bins - 1 - ddof # num_bins здесь может быть неактуальным после слияния?
-            # Правильнее использовать количество бинов ПОСЛЕ слияния:
             current_num_bins = len(expected_freq)
             degrees_of_freedom = current_num_bins - 1 - ddof
 
@@ -136,7 +127,10 @@ def perform_chi_square_test(df: pd.DataFrame, distribution: str = 'norm', alpha:
                  continue
 
             try:
-                chi2_stat, p_value = stats.chisquare(f_obs=observed_freq, f_exp=expected_freq, ddof=ddof)
+                # Заменяем вызов stats.chisquare на ручной расчет,
+                # чтобы избежать внутренней нормализации и получить точное соответствие со скриптом.
+                chi2_stat = np.sum((observed_freq - expected_freq)**2 / expected_freq)
+                p_value = stats.chi2.sf(chi2_stat, degrees_of_freedom) # sf - это 1 - cdf
 
                 test_result["statistic"] = float(chi2_stat)
                 test_result["p_value"] = float(p_value)

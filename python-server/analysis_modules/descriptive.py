@@ -85,8 +85,8 @@ def calculate_descriptive_stats(df: pd.DataFrame) -> Tuple[List[Dict[str, Any]],
         mode_result = col_data.mode()
         variance_val = col_data.var(ddof=1)
         std_dev_val = col_data.std(ddof=1)
-        skewness_val = col_data.skew()
-        kurtosis_val = col_data.kurt()
+        skewness_val = stats.skew(col_data)
+        kurtosis_val = stats.kurtosis(col_data, bias=True)
         min_val = float(col_data.min())
         max_val = float(col_data.max())
         
@@ -96,11 +96,11 @@ def calculate_descriptive_stats(df: pd.DataFrame) -> Tuple[List[Dict[str, Any]],
         iqr_val = float(q3_val - q1_val)
 
         variation_coefficient_val = 0.0
-        # Проверяем, что mean_val не None/NaN и не 0 перед делением
-        if pd.notna(mean_val) and mean_val != 0 and pd.notna(std_dev_val):
+        # Проверяем, что mean_val не None/NaN и не близко к 0 перед делением
+        if pd.notna(mean_val) and abs(mean_val) > 1e-9 and pd.notna(std_dev_val):
             variation_coefficient_val = float(std_dev_val / mean_val)
-        elif pd.isna(mean_val) or pd.isna(std_dev_val):
-             variation_coefficient_val = np.nan # Используем NaN если не можем посчитать
+        elif pd.isna(mean_val) or pd.isna(std_dev_val) or (pd.notna(mean_val) and abs(mean_val) <= 1e-9):
+             variation_coefficient_val = np.nan # Используем NaN, если среднее слишком близко к нулю или не определено
 
         stats_dict: Dict[str, Any] = {
             "variable_name": col_name,

@@ -8,6 +8,7 @@ from scipy.optimize import curve_fit
 from scipy.signal import find_peaks
 import sys 
 from scipy import stats # <--- ВАЖНЫЙ ИМПОРТ
+import inspect
 
 # Создаем классы для доменной модели, отдельно от protobuf
 class RegressionData:
@@ -53,11 +54,11 @@ def quadratic_func(x, a, b, c):
 def trigonometric_func(x, a, b, c, d):
     return a * np.sin(b * np.asarray(x) + c) + d
 
-def sigmoid_func(x, k, x0, l_param): 
-    x_arr = np.asarray(x) 
-    z = -k * (x_arr - x0)
-    z = np.clip(z, -709, 709)
-    return l_param / (1 + np.exp(z))
+def sigmoid_func(x, a, b, c): # a=k (steepness), b=x0 (midpoint), c=L (max value)
+    x_arr = np.asarray(x)
+    z = -a * (x_arr - b)
+    z = np.clip(z, -709, 709) # clip to avoid overflow in exp
+    return c / (1 + np.exp(z))
 
 regression_types = [
     ("Power", power_func, 2),
@@ -235,52 +236,21 @@ def perform_simple_linear_regression(df: pd.DataFrame, dependent_var: str = None
                         x0_0 = np.median(x_data)
                         k0_val = 1.0
                         y_range_s = y_max_s - y_min_s; x_range_s = x_max_s - x_min_s
-                        if x_range_s > 1e-6 and y_range_s > 1e-6:
-                            try: 
+                        try:
+                            if x_range_s > 1e-6 and y_range_s > 1e-6:
                                 # Улучшенная оценка начального наклона
-                                # Находим точки в середине диапазона Y для лучшей оценки наклона в точке перегиба
                                 mid_y = y_min_s + y_range_s * 0.5
-                                mid_indices = np.argsort(np.abs(y_data - mid_y))[:max(3, n_valid // 5)]  # Берем до 20% точек ближайших к середине
-                                if len(mid_indices) >= 3:  # Если достаточно точек для оценки
+                                mid_indices = np.argsort(np.abs(y_data - mid_y))[:max(3, n_valid // 5)]
+                                if len(mid_indices) >= 3:
                                     mid_x = x_data[mid_indices]
                                     mid_y_actual = y_data[mid_indices]
-                                    # Линейная регрессия на этом участке даст хорошую оценку наклона в точке перегиба
                                     slope_mid = np.polyfit(mid_x, mid_y_actual, 1)[0]
-                                    # Для сигмоиды максимальный наклон = k*L/4, отсюда k = 4*slope/L
                                     k0_val = 4 * slope_mid / l_param0 if abs(l_param0) > 1e-6 else slope_mid
-                                else:
-                                    slope_sign = np.sign(np.polyfit(x_data, y_data, 1)[0])
-                                    k0_val = slope_sign * 4 / (x_range_s * 0.5)
-                                
-                                # Ограничиваем k в разумных пределах
-                                k0_val = np.clip(k0_val, -100/ (x_range_s if x_range_s >0.1 else 0.1), 100 / (x_range_s if x_range_s > 0.1 else 0.1))
-                                if abs(k0_val) < 1e-3: k0_val = slope_sign * 1e-3 if k0_val !=0 else 1e-3
-                            except Exception as e:
-                                logs.append(log_prefix + f"Warning during sigmoid k0 estimation: {e}. Using default value.")
-                                k0_val = 1.0
-                        
-                        # Оценка x0 - точки перегиба
-                        try:
-                            # Находим точку, где y примерно равно половине максимума
-                            half_height = y_min_s + y_range_s * 0.5
-                            closest_idx = np.argmin(np.abs(y_data - half_height))
-                            x0_0 = x_data[closest_idx]  # Это лучшая оценка точки перегиба x0
-                        except:
-                            x0_0 = np.median(x_data)  # Запасной вариант
-                        
-                        p0 = [k0_val, x0_0, l_param0] 
-                        l_low_bound = y_min_s - 0.2 * abs(y_range_s); l_high_bound = y_max_s + 0.2 * abs(y_range_s)
-                        if abs(y_range_s) < 1e-3: 
-                            l_low_bound = min(y_min_s, l_param0) - 0.5 * abs(l_param0 if l_param0 !=0 else 1.0)
-                            l_high_bound = max(y_max_s, l_param0) + 0.5 * abs(l_param0 if l_param0 !=0 else 1.0)
-                        if l_high_bound <= l_low_bound + 1e-3 : l_high_bound = l_low_bound + max(1.0, 0.1*abs(l_low_bound))
-                        x_range_s_eff = x_range_s if x_range_s > 1e-6 else 1.0 
-                        k_abs_max = 1000 / (x_range_s_eff if x_range_s_eff > 0.01 else 0.01)
-                        bounds = ([-k_abs_max, x_min_s - 0.1*x_range_s_eff, l_low_bound], 
-                                  [k_abs_max,  x_max_s + 0.1*x_range_s_eff,  l_high_bound])
-                        method_for_curve_fit = 'trf'
-                        current_maxfev = max(current_maxfev, 50000 * current_n_params)  # Увеличиваем количество итераций
-                
+                                    p0 = [k0_val, x0_0, l_param0]
+                        except (np.linalg.LinAlgError, ValueError):
+                            # Если расчеты не удались, p0 остается [1.0, median(x), max(y)]
+                            pass
+
                 if reg_type == "Linear (curve_fit)":
                     slope_init = (np.mean(y_data*x_data) - np.mean(y_data)*np.mean(x_data)) / (np.mean(x_data**2) - np.mean(x_data)**2) if np.var(x_data)>1e-9 else 1.0
                     if np.isnan(slope_init) or np.isinf(slope_init): slope_init = 1.0
@@ -335,9 +305,9 @@ def perform_simple_linear_regression(df: pd.DataFrame, dependent_var: str = None
                         except Exception as alt_e:
                             logs.append(log_prefix + f"Alternative fitting attempt failed: {alt_e}")
 
-                y_pred_cf = func(x_data, *params)
-                r_squared_val = calculate_r_squared(y_data, y_pred_cf)
-                sse_val = calculate_sse(y_data, y_pred_cf)
+                y_pred = func(x_data, *params)
+                r_squared_val = calculate_r_squared(y_data, y_pred)
+                sse_val = calculate_sse(y_data, y_pred)
                 
                 adj_r_squared_val = np.nan
                 if pd.notna(r_squared_val) and n_valid > current_n_params : 
@@ -348,12 +318,9 @@ def perform_simple_linear_regression(df: pd.DataFrame, dependent_var: str = None
 
                 f_statistic_val, prob_f_statistic_val = np.nan, np.nan
                 
-                # Не вычисляем F-статистику для сигмоидной и тригонометрической моделей
-                if reg_type in ["Sigmoid", "Trigonometric"]:
-                    f_statistic_val = np.nan
-                    prob_f_statistic_val = np.nan
-                elif pd.notna(sse_val) and ss_total_for_pair > 1e-12 and n_valid > current_n_params:
-                    df_model_cf = current_n_params 
+                # F-статистика теперь вычисляется для всех моделей, если это возможно
+                if pd.notna(sse_val) and ss_total_for_pair > 1e-12 and n_valid > current_n_params:
+                    df_model_cf = current_n_params - 1
                     df_error_cf = n_valid - current_n_params 
                     if df_error_cf > 0 and df_model_cf > 0: 
                         ss_model_cf = ss_total_for_pair - sse_val
@@ -369,59 +336,57 @@ def perform_simple_linear_regression(df: pd.DataFrame, dependent_var: str = None
                             f_statistic_val = np.inf if ss_model_cf > 1e-12 else 0.0
                             prob_f_statistic_val = 0.0 if ss_model_cf > 1e-12 else 1.0
                 
-                coefficients_cf = []
-                param_names_map = {
-                    "Power": ["a", "b"], "Logarithmic": ["a", "b"],
-                    "Quadratic": ["a", "b", "c"], "Trigonometric": ["a", "b", "c", "d"],
-                    "Sigmoid": ["a", "b", "c"],
-                    "Linear (curve_fit)": [x_col_name, "const"] 
-                }
-                current_param_names_list_cf = param_names_map.get(reg_type, [f"p{i+1}" for i in range(current_n_params)])
+                # Вычисление t-статистики и доверительных интервалов
+                coefficients = []
+                pcov_is_valid = pcov is not None and not np.any(np.isinf(pcov)) and not np.any(np.isnan(pcov))
 
-                for idx, name_cf in enumerate(current_param_names_list_cf):
-                    std_err_cf, t_stat_cf, p_val_cf = np.nan, np.nan, np.nan
-                    ci_l_cf, ci_u_cf = params[idx], params[idx] 
+                try:
+                    if not pcov_is_valid:
+                        raise ValueError("Covariance matrix could not be estimated.")
 
-                    # Не вычисляем t-статистику для сигмоидной и тригонометрической моделей
-                    if reg_type in ["Sigmoid", "Trigonometric"]:
-                        std_err_cf = np.nan
-                        t_stat_cf = np.nan
-                        p_val_cf = np.nan
-                        ci_l_cf, ci_u_cf = np.nan, np.nan
-                    elif valid_covariance and idx < len(diag_pcov_elements) and pd.notna(diag_pcov_elements[idx]) and diag_pcov_elements[idx] >= 0:
-                        param_variance_cf = diag_pcov_elements[idx]
-                        if param_variance_cf > 1e-12: 
-                            std_err_cf = np.sqrt(param_variance_cf)
-                            df_error_t_cf = n_valid - current_n_params 
-                            if df_error_t_cf > 0:
-                                try: 
-                                    t_stat_cf = params[idx] / std_err_cf
-                                    p_val_cf = stats.t.sf(np.abs(t_stat_cf), df_error_t_cf) * 2 
-                                except (ValueError, FloatingPointError): t_stat_cf, p_val_cf = np.nan, np.nan
-                                try: 
-                                    t_crit_cf = stats.t.ppf(1 - 0.05/2, df_error_t_cf) 
-                                    ci_l_cf = float(params[idx] - t_crit_cf * std_err_cf)
-                                    ci_u_cf = float(params[idx] + t_crit_cf * std_err_cf)
-                                except (ValueError, FloatingPointError): ci_l_cf, ci_u_cf = np.nan, np.nan
-                        else: 
-                            std_err_cf = 0.0 
-                            if abs(params[idx]) > 1e-9 : t_stat_cf = np.inf * np.sign(params[idx]); p_val_cf = 0.0
-                            else: t_stat_cf = 0.0; p_val_cf = 1.0
+                    # Стандартные ошибки
+                    perr = np.sqrt(np.diag(pcov))
                     
-                    coefficients_cf.append(RegressionCoefficient(
-                        variable_name=name_cf, coefficient=float(params[idx]),
-                        standard_error=float(std_err_cf) if pd.notna(std_err_cf) else 0.0,
-                        t_statistic=float(t_stat_cf) if pd.notna(t_stat_cf) else 0.0,
-                        p_value=float(p_val_cf) if pd.notna(p_val_cf) else 1.0,
-                        ci_lower=float(ci_l_cf) if pd.notna(ci_l_cf) else float(params[idx]),
-                        ci_upper=float(ci_u_cf) if pd.notna(ci_u_cf) else float(params[idx])
-                    ))
-                
-                if is_linear_curve_fit and current_param_names_list_cf == [x_col_name, "const"]:
-                     const_obj_idx = next((i for i, c in enumerate(coefficients_cf) if c.variable_name == "const"), -1)
-                     slope_obj_idx = next((i for i, c in enumerate(coefficients_cf) if c.variable_name == x_col_name), -1)
-                     if const_obj_idx != -1 and slope_obj_idx != -1 and const_obj_idx > slope_obj_idx: 
-                         coefficients_cf[const_obj_idx], coefficients_cf[slope_obj_idx] = coefficients_cf[slope_obj_idx], coefficients_cf[const_obj_idx]
+                    # Степени свободы
+                    dof = n_valid - len(params)
+                    if dof <= 0:
+                        raise ValueError("Degrees of freedom must be > 0")
+
+                    # t-статистика и p-значения
+                    t_stats_vals = params / perr
+                    p_values_vals = 2 * stats.t.sf(np.abs(t_stats_vals), dof)
+
+                    # Доверительный интервал (95%)
+                    alpha = 0.05
+                    t_crit_val = stats.t.ppf(1.0 - alpha / 2.0, dof)
+                    ci_lower_vals = params - t_crit_val * perr
+                    ci_upper_vals = params + t_crit_val * perr
+                    
+                    # Получаем имена параметров из сигнатуры функции
+                    if is_linear_curve_fit:
+                        # Для линейной модели, подогнанной через curve_fit, имена "a" и "b" нужно заменить
+                        # на имя независимой переменной и "const" для совместимости с фронтендом.
+                        # linear_func(x, a, b) -> a=slope, b=intercept.
+                        param_names_list = [x_col_name, 'const']
+                    else:
+                        param_names_list = list(inspect.signature(func).parameters.keys())[1:] # Пропускаем 'x'
+
+                    for i, param_name in enumerate(param_names_list):
+                        coefficients.append(RegressionCoefficient(
+                            variable_name=param_name,
+                            coefficient=float(params[i]),
+                            standard_error=float(perr[i]),
+                            t_statistic=float(t_stats_vals[i]),
+                            p_value=float(p_values_vals[i]),
+                            ci_lower=float(ci_lower_vals[i]),
+                            ci_upper=float(ci_upper_vals[i])
+                        ))
+                except (RuntimeWarning, ValueError, np.linalg.LinAlgError) as stat_err:
+                     logs.append(log_prefix + f"Stats calculation for {reg_type} failed: {stat_err}. Storing coefficients only.")
+                     # Если расчет статистики не удался, сохраняем только коэффициенты
+                     param_names_list = list(inspect.signature(func).parameters.keys())[1:]
+                     for i, param_name in enumerate(param_names_list):
+                        coefficients.append(RegressionCoefficient(variable_name=param_name, coefficient=float(params[i])))
 
                 final_model_type_name = "Linear" if is_linear_curve_fit else reg_type
 
@@ -434,9 +399,9 @@ def perform_simple_linear_regression(df: pd.DataFrame, dependent_var: str = None
                 regression_result_cf.f_statistic = float(f_statistic_val) if pd.notna(f_statistic_val) else 0.0
                 regression_result_cf.prob_f_statistic = float(prob_f_statistic_val) if pd.notna(prob_f_statistic_val) else 1.0
                 regression_result_cf.sse = float(sse_val) if pd.notna(sse_val) else 0.0
-                regression_result_cf.coefficients = coefficients_cf
+                regression_result_cf.coefficients = coefficients
                 regression_result_cf.data_points = [{"x": float(xv), "y": float(yv)} for xv, yv in zip(x_data, y_data)]
-                regression_result_cf.residuals = (y_data - y_pred_cf).tolist()
+                regression_result_cf.residuals = (y_data - y_pred).tolist()
                 
                 can_add_cf_model = True
                 if is_linear_curve_fit: 

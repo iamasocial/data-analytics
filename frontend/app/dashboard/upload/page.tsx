@@ -18,10 +18,15 @@ import { RegressionChart, calculateY } from "@/components/charts/regression-char
 import { ResidualsAnalysis } from "@/components/charts/residuals-analysis"
 
 // Helper function to format numbers, handling potential non-numeric modes
-function formatNumber(value: number | string | null | undefined, decimals = 3): string {
+function formatNumber(value: number | string | null | undefined, decimals = 3, useExponential = false): string {
   if (value === null || value === undefined) return "N/A";
   const num = Number(value);
   if (isNaN(num)) return String(value); // Return original string if mode is non-numeric
+
+  if (useExponential && Math.abs(num) > 0 && Math.abs(num) < 0.001) {
+    return num.toExponential(2);
+  }
+
   return num.toFixed(decimals);
 }
 
@@ -628,40 +633,26 @@ export default function UploadPage() {
 
       const results = await response.json();
       
-      // Добавляем дополнительную обработку для совместимости с разными форматами имен полей
-      console.log("Original API results:", results);
+
       
       // Детальная проверка данных гистограммы
       if (results.descriptive_stats?.histograms && results.descriptive_stats.histograms.length > 0) {
         const firstHist = results.descriptive_stats.histograms[0];
-        console.log("First histogram fields:", Object.keys(firstHist));
-        console.log("First histogram data:", {
-          column_name: firstHist.column_name,
-          bins_length: firstHist.bins?.length,
-          frequencies_length: firstHist.frequencies?.length,
-          normalCurveX_length: firstHist.normalCurveX?.length,
-          normalCurveY_length: firstHist.normalCurveY?.length,
-          mean: firstHist.mean,
-          stdDev: firstHist.stdDev
-        });
-        
-        // Проверяем все поля гистограммы
-        console.log("Full first histogram:", JSON.stringify(firstHist));
+
         
         // Преобразуем snake_case в camelCase для полей нормальной кривой
         results.descriptive_stats.histograms.forEach((hist: Record<string, any>) => {
           // Проверяем наличие snake_case полей и преобразуем их в camelCase
           if (hist.normal_curve_x && !hist.normalCurveX) {
             hist.normalCurveX = hist.normal_curve_x;
-            console.log(`Converted normal_curve_x to normalCurveX for ${hist.column_name}`);
           }
           if (hist.normal_curve_y && !hist.normalCurveY) {
             hist.normalCurveY = hist.normal_curve_y;
-            console.log(`Converted normal_curve_y to normalCurveY for ${hist.column_name}`);
+
           }
           if (hist.std_dev && !hist.stdDev) {
             hist.stdDev = hist.std_dev;
-            console.log(`Converted std_dev to stdDev for ${hist.column_name}`);
+
           }
         });
       }
@@ -676,7 +667,7 @@ export default function UploadPage() {
           results.wilcoxon_tests.mannWhitneyResults = results.wilcoxon_tests.mann_whitney_results;
         }
         
-        console.log("Modified wilcoxon_tests:", results.wilcoxon_tests);
+
       }
       
       setAnalysisResult(results);
@@ -739,7 +730,7 @@ export default function UploadPage() {
         const yPadding = (yMax - yMin) * 0.1 || 0.1; // Add padding, handle yMax === yMin
 
         setGlobalYDomain([yMin - yPadding, yMax + yPadding]);
-        console.log("Calculated globalYDomain:", [yMin - yPadding, yMax + yPadding]);
+        
       } else {
         setGlobalYDomain(undefined); // Reset if no valid Y values
       }
@@ -773,7 +764,7 @@ export default function UploadPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">{t("uploadData")}</h1>
-        <p className="text-gray-500">Загрузите файлы для анализа данных</p>
+        <p className="text-gray-500">{t("uploadSubtitle")}</p>
       </div>
 
       <Card>
@@ -789,13 +780,13 @@ export default function UploadPage() {
               <Upload className="h-12 w-12 text-gray-400" />
               <div>
                 <p className="text-lg font-medium">
-                  {isDragActive ? "Отпустите файлы для загрузки" : t("dragAndDrop")}
+                  {isDragActive ? t("dropFilesHere") : t("dragAndDrop")}
                 </p>
                 <p className="text-sm text-gray-500 mt-1">{t("supportedFormats")}</p>
                 <p className="text-sm text-gray-500 mt-1">{t("maxFileSize")}</p>
               </div>
               <Button type="button" disabled={uploading}>
-                Выбрать файлы
+                {t("selectFiles")}
               </Button>
             </div>
           </div>
@@ -803,9 +794,9 @@ export default function UploadPage() {
           {files.length > 0 && (
             <div className="mt-6 space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="font-medium">Выбранные файлы</h3>
+                <h3 className="font-medium">{t("selectedFiles")}</h3>
                 <Button variant="ghost" size="sm" onClick={clearAll} disabled={uploading}>
-                  Очистить все
+                  {t("clearAll")}
                 </Button>
               </div>
               <div className="space-y-2">
@@ -820,7 +811,7 @@ export default function UploadPage() {
                     </div>
                     <Button variant="ghost" size="icon" onClick={() => removeFile(index)} disabled={uploading}>
                       <X className="h-4 w-4" />
-                      <span className="sr-only">Удалить файл</span>
+                      <span className="sr-only">{t("removeFile")}</span>
                     </Button>
                   </div>
                 ))}
@@ -828,7 +819,7 @@ export default function UploadPage() {
 
               {/* Analysis Selection Checkboxes */}
               <div className="mt-6 space-y-4">
-                <h3 className="font-medium">Выберите анализы для выполнения:</h3>
+                <h3 className="font-medium">{t("selectAnalyses")}</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="flex items-center space-x-2">
                     <Checkbox
@@ -840,7 +831,7 @@ export default function UploadPage() {
                       disabled={uploading}
                     />
                     <Label htmlFor="descriptive_stats" className="cursor-pointer">
-                      Описательная статистика
+                      {t("descriptiveStats")}
                     </Label>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -853,7 +844,7 @@ export default function UploadPage() {
                       disabled={uploading}
                     />
                     <Label htmlFor="normality_test" className="cursor-pointer">
-                      Проверка нормальности
+                      {t("normalityTest")}
                     </Label>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -866,7 +857,7 @@ export default function UploadPage() {
                       disabled={uploading}
                     />
                     <Label htmlFor="regression" className="cursor-pointer">
-                      Регрессия
+                      {t("regression")}
                     </Label>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -879,7 +870,7 @@ export default function UploadPage() {
                       disabled={uploading}
                     />
                     <Label htmlFor="wilcoxon_signed_rank" className="cursor-pointer">
-                      Тест знаковых рангов Вилкоксона
+                      {t("wilcoxonSignedRankTest")}
                     </Label>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -892,7 +883,7 @@ export default function UploadPage() {
                       disabled={uploading}
                     />
                     <Label htmlFor="mann_whitney" className="cursor-pointer">
-                      Тест Манна-Уитни
+                      {t("mannWhitneyTest")}
                     </Label>
                   </div>
                 </div>
@@ -902,10 +893,10 @@ export default function UploadPage() {
               {/* Regression Variable Selection */}
               {selectedAnalysesOptions.regression && fileColumns.length > 0 && (
                 <div className="mt-4 p-4 border rounded-md bg-gray-50">
-                  <h3 className="font-medium mb-3">Переменные для регрессии:</h3>
+                  <h3 className="font-medium mb-3">{t("regressionVariables")}</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="dependent-variable">Зависимая переменная (Y):</Label>
+                      <Label htmlFor="dependent-variable">{t("dependentVariableY")}</Label>
                       <select
                         id="dependent-variable"
                         value={dependentVariable}
@@ -913,14 +904,14 @@ export default function UploadPage() {
                         className="w-full p-2 border rounded-md"
                         disabled={uploading}
                       >
-                        <option value="">Выберите переменную</option>
+                        <option value="">{t("selectVariable")}</option>
                         {fileColumns.map((column) => (
                           <option key={`dep-${column}`} value={column}>{column}</option>
                         ))}
                       </select>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="independent-variable">Независимая переменная (X):</Label>
+                      <Label htmlFor="independent-variable">{t("independentVariableX")}</Label>
                       <select
                         id="independent-variable"
                         value={independentVariable}
@@ -928,7 +919,7 @@ export default function UploadPage() {
                         className="w-full p-2 border rounded-md"
                         disabled={uploading}
                       >
-                        <option value="">Выберите переменную</option>
+                        <option value="">{t("selectVariable")}</option>
                         {fileColumns.map((column) => (
                           <option key={`indep-${column}`} value={column}>{column}</option>
                         ))}
@@ -942,10 +933,10 @@ export default function UploadPage() {
               {/* Wilcoxon Signed Rank Test Variable Selection */}
               {selectedAnalysesOptions.wilcoxon_signed_rank && fileColumns.length > 0 && (
                 <div className="mt-4 p-4 border rounded-md bg-gray-50">
-                  <h3 className="font-medium mb-3">Переменные для теста знаковых рангов Вилкоксона:</h3>
+                  <h3 className="font-medium mb-3">{t("wilcoxonSignedRankVariables")}</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="wilcoxon-var1">Первая переменная:</Label>
+                      <Label htmlFor="wilcoxon-var1">{t("firstVariable")}</Label>
                       <select
                         id="wilcoxon-var1"
                         value={wilcoxonVar1}
@@ -953,14 +944,14 @@ export default function UploadPage() {
                         className="w-full p-2 border rounded-md"
                         disabled={uploading}
                       >
-                        <option value="">Выберите переменную</option>
+                        <option value="">{t("selectVariable")}</option>
                         {fileColumns.map((column) => (
                           <option key={`wilc1-${column}`} value={column}>{column}</option>
                         ))}
                       </select>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="wilcoxon-var2">Вторая переменная:</Label>
+                      <Label htmlFor="wilcoxon-var2">{t("secondVariable")}</Label>
                       <select
                         id="wilcoxon-var2"
                         value={wilcoxonVar2}
@@ -968,14 +959,14 @@ export default function UploadPage() {
                         className="w-full p-2 border rounded-md"
                         disabled={uploading}
                       >
-                        <option value="">Выберите переменную</option>
+                        <option value="">{t("selectVariable")}</option>
                         {fileColumns.map((column) => (
                           <option key={`wilc2-${column}`} value={column}>{column}</option>
                         ))}
                       </select>
                     </div>
                   </div>
-                  <p className="mt-2 text-sm text-gray-500">Выберите пару переменных для сравнения. Тест требует минимум 6 значений без пропусков (NA).</p>
+                  <p className="mt-2 text-sm text-gray-500">{t("wilcoxonSignedRankHint")}</p>
                 </div>
               )}
               {/* End Wilcoxon Signed Rank Test Variable Selection */}
@@ -983,10 +974,10 @@ export default function UploadPage() {
               {/* Mann-Whitney Test Variable Selection */}
               {selectedAnalysesOptions.mann_whitney && fileColumns.length > 0 && (
                 <div className="mt-4 p-4 border rounded-md bg-gray-50">
-                  <h3 className="font-medium mb-3">Переменные для теста Манна-Уитни:</h3>
+                  <h3 className="font-medium mb-3">{t("mannWhitneyVariables")}</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="mann-whitney-group">Группирующая переменная:</Label>
+                      <Label htmlFor="mann-whitney-group">{t("group_column")}</Label>
                       <select
                         id="mann-whitney-group"
                         value={mannWhitneyGroup}
@@ -994,14 +985,14 @@ export default function UploadPage() {
                         className="w-full p-2 border rounded-md"
                         disabled={uploading}
                       >
-                        <option value="">Выберите переменную</option>
+                        <option value="">{t("selectVariable")}</option>
                         {fileColumns.map((column) => (
                           <option key={`mw-group-${column}`} value={column}>{column}</option>
                         ))}
                       </select>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="mann-whitney-value">Значения для сравнения:</Label>
+                      <Label htmlFor="mann-whitney-value">{t("valuesToCompare")}</Label>
                       <select
                         id="mann-whitney-value"
                         value={mannWhitneyValue}
@@ -1009,14 +1000,14 @@ export default function UploadPage() {
                         className="w-full p-2 border rounded-md"
                         disabled={uploading}
                       >
-                        <option value="">Выберите переменную</option>
+                        <option value="">{t("selectVariable")}</option>
                         {fileColumns.map((column) => (
                           <option key={`mw-value-${column}`} value={column}>{column}</option>
                         ))}
                       </select>
                     </div>
                   </div>
-                  <p className="mt-2 text-sm text-gray-500">Группирующая переменная должна содержать ровно 2 уникальных значения, а в каждой группе должно быть минимум 5 значений без пропусков (NA).</p>
+                  <p className="mt-2 text-sm text-gray-500">{t("mannWhitneyHint")}</p>
                 </div>
               )}
               {/* End Mann-Whitney Test Variable Selection */}
@@ -1026,10 +1017,10 @@ export default function UploadPage() {
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">
                       {uploadStatus === "uploading"
-                        ? "Загрузка..."
+                        ? t("uploading")
                         : uploadStatus === "success"
-                          ? "Загрузка завершена"
-                          : "Ошибка загрузки"}
+                          ? t("uploadComplete")
+                          : t("uploadError")}
                     </span>
                     <span className="text-sm font-medium">{uploadProgress}%</span>
                   </div>
@@ -1037,7 +1028,7 @@ export default function UploadPage() {
                   {uploadStatus === "success" && (
                     <div className="flex items-center gap-2 text-green-600 text-sm mt-2">
                       <CheckCircle2 className="h-4 w-4" />
-                      <span>Файлы успешно загружены и отправлены на анализ</span>
+                      <span>{t("uploadSuccessMessage")}</span>
                     </div>
                   )}
                   {uploadStatus === "error" && (
@@ -1073,10 +1064,10 @@ export default function UploadPage() {
                           d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                         ></path>
                       </svg>
-                      Загрузка...
+                      {t("uploading")}...
                     </div>
                   ) : (
-                    "Загрузить и анализировать"
+                    t("uploadAndAnalyze")
                   )}
                 </Button>
               </div>
@@ -1089,7 +1080,7 @@ export default function UploadPage() {
       {analysisResult && (
         <Card className="mt-6">
           <CardHeader>
-            <CardTitle>Результаты Анализа</CardTitle>
+            <CardTitle>{t("results.title")}</CardTitle>
           </CardHeader>
           <CardContent>
             <Tabs defaultValue={
@@ -1128,20 +1119,20 @@ export default function UploadPage() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Переменная</TableHead>
-                          <TableHead>Кол-во</TableHead>
-                          <TableHead>Среднее</TableHead>
-                          <TableHead>Медиана</TableHead>
-                          <TableHead>Мода</TableHead>
-                          <TableHead>Стд.Откл.</TableHead>
-                          <TableHead>Мин.</TableHead>
-                          <TableHead>Макс.</TableHead>
-                          <TableHead>Q1 (25%)</TableHead>
-                          <TableHead>Q3 (75%)</TableHead>
-                          <TableHead>IQR</TableHead>
-                          <TableHead>Коэф.вар.</TableHead>
-                          <TableHead>Асимметрия</TableHead>
-                          <TableHead>Эксцесс</TableHead>
+                          <TableHead>{t("variable")}</TableHead>
+                          <TableHead>{t("count")}</TableHead>
+                          <TableHead>{t("mean")}</TableHead>
+                          <TableHead>{t("median")}</TableHead>
+                          <TableHead>{t("mode")}</TableHead>
+                          <TableHead>{t("stdDev")}</TableHead>
+                          <TableHead>{t("min")}</TableHead>
+                          <TableHead>{t("max")}</TableHead>
+                          <TableHead>{t("q1")}</TableHead>
+                          <TableHead>{t("q3")}</TableHead>
+                          <TableHead>{t("iqr")}</TableHead>
+                          <TableHead>{t("variationCoefficient")}</TableHead>
+                          <TableHead>{t("skewness")}</TableHead>
+                          <TableHead>{t("kurtosis")}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1154,7 +1145,7 @@ export default function UploadPage() {
                             <TableCell>
                               {Array.isArray(stat.mode) 
                                 ? (stat.mode.length > 5 || stat.mode.length === Number(stat.count)) 
-                                  ? (stat.mode.length === Number(stat.count) ? "Уникальные" : `Множество (${stat.mode.length})`) 
+                                  ? (stat.mode.length === Number(stat.count) ? t("unique") : `${t("multiple")} (${stat.mode.length})`) 
                                   : stat.mode.map((m: number | string) => formatNumber(m, 2)).join(", ")
                                 : formatNumber(stat.mode, 2)}
                             </TableCell>
@@ -1170,7 +1161,7 @@ export default function UploadPage() {
                           </TableRow>
                         )) ?? (
                           <TableRow>
-                            <TableCell colSpan={14} className="text-center">Нет данных</TableCell>
+                            <TableCell colSpan={14} className="text-center">{t("noData")}</TableCell>
                           </TableRow>
                         )}
                       </TableBody>
@@ -1178,29 +1169,14 @@ export default function UploadPage() {
 
                     {/* Add Histograms Here */}
                     <div>
-                      <h3 className="text-lg font-semibold mb-4">Гистограммы Распределения</h3>
+                      <h3 className="text-lg font-semibold mb-4">{t("histograms")}</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {analysisResult.descriptive_stats.histograms?.map((hist: any, index: number) => {
-                           // Отладочный вывод для проверки наличия данных нормальной кривой
-                           console.log(`[page.tsx] Histogram data for ${hist.column_name}:`, {
-                             bins: hist.bins?.length,
-                             frequencies: hist.frequencies?.length,
-                             normal_curve_x: hist.normalCurveX?.length, // Используем camelCase формат
-                             normal_curve_y: hist.normalCurveY?.length, // Используем camelCase формат
-                             mean: hist.mean,
-                             std_dev: hist.stdDev // Используем camelCase формат
-                           });
+
                            
                            // Дополнительный отладочный вывод перед передачей в DistributionChart
                            if (hist.bins && hist.frequencies && hist.bins.length > 0 && hist.frequencies.length > 0) {
-                             console.log(`[page.tsx] Passing data to DistributionChart for ${hist.column_name}:`, {
-                               bins_length: hist.bins.length,
-                               frequencies_length: hist.frequencies.length,
-                               normalCurveX: hist.normalCurveX ? `present (${hist.normalCurveX.length} points)` : 'missing',
-                               normalCurveY: hist.normalCurveY ? `present (${hist.normalCurveY.length} points)` : 'missing',
-                               mean: hist.mean,
-                               stdDev: hist.stdDev
-                             });
+
                            }
                            
                            return (
@@ -1218,32 +1194,32 @@ export default function UploadPage() {
                                    showNormalCurve={false} // Отключаем отображение нормальной кривой
                                  />
                                ) : (
-                                 <p className="text-sm text-center text-gray-500">Нет данных для гистограммы '{hist.column_name}'</p>
+                                 <p className="text-sm text-center text-gray-500">{`${t("noDataForHistogram")} '${hist.column_name}'`}</p>
                                )}
                              </div>
                            );
                         }) ?? (
-                           <p className="text-sm text-center text-gray-500 md:col-span-2">Нет данных для гистограмм.</p>
+                           <p className="text-sm text-center text-gray-500 md:col-span-2">{t("noDataForHistograms")}</p>
                         )}
                       </div>
                     </div>
 
                     {/* Add Confidence Intervals Here */}
-                    <div>
-                      <h3 className="text-lg font-semibold mb-4">Доверительные Интервалы</h3>
+                    <div className="hidden">
+                      <h3 className="text-lg font-semibold mb-4">{t("confidenceIntervals")}</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           {analysisResult.descriptive_stats.confidence_intervals?.map((ci: any, index: number) => (
                           <div key={`ci-${index}-${ci.column_name}`} className="border rounded-lg p-4">
                              <h4 className="text-md font-semibold mb-2 text-center">{ci.column_name}</h4>
                              <div className="space-y-2">
-                               <p><strong>Уровень доверия:</strong> {(ci.confidence_level * 100).toFixed(0)}%</p>
-                               <p><strong>Интервал:</strong> [{formatNumber(ci.lower_bound)}, {formatNumber(ci.upper_bound)}]</p>
-                               <p><strong>Среднее:</strong> {formatNumber(ci.mean)}</p>
-                               <p><strong>Стандартная ошибка:</strong> {formatNumber(ci.standard_error)}</p>
+                               <p><strong>{t("confidenceLevel")}:</strong> {(ci.confidence_level * 100).toFixed(0)}%</p>
+                               <p><strong>{t("interval")}:</strong> [{formatNumber(ci.lower_bound)}, {formatNumber(ci.upper_bound)}]</p>
+                               <p><strong>{t("mean")}:</strong> {formatNumber(ci.mean)}</p>
+                               <p><strong>{t("standardError")}:</strong> {formatNumber(ci.standard_error)}</p>
                              </div>
                           </div>
                         )) ?? (
-                           <p className="text-sm text-center text-gray-500 md:col-span-2">Нет данных для доверительных интервалов.</p>
+                           <p className="text-sm text-center text-gray-500 md:col-span-2">{t("noDataForConfidenceIntervals")}</p>
                         )}
                       </div>
                     </div>
@@ -1256,19 +1232,19 @@ export default function UploadPage() {
                 <TabsContent value="normality-test">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Тесты на Нормальность</CardTitle>
+                    <CardTitle>{t("normalityTests")}</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-6">
                     {/* Shapiro-Wilk Test Results */}
                     <div>
-                      <h3 className="text-lg font-semibold mb-4">Тест Шапиро-Уилка</h3>
+                      <h3 className="text-lg font-semibold mb-4">{t("shapiroWilkTest")}</h3>
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Переменная</TableHead>
-                          <TableHead>Статистика</TableHead>
-                          <TableHead>P-значение</TableHead>
-                          <TableHead>Вывод (alpha=0.05)</TableHead>
+                          <TableHead>{t("variable")}</TableHead>
+                          <TableHead>{t("statistic")}</TableHead>
+                          <TableHead>{t("pValue")}</TableHead>
+                          <TableHead>{t("conclusion")}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1279,13 +1255,13 @@ export default function UploadPage() {
                             <TableCell>{formatNumber(test.p_value)}</TableCell>
                               <TableCell>
                                 {test.is_normal 
-                                  ? "Распределение нормальное (p > 0.05)" 
-                                  : "Распределение не нормальное (p ≤ 0.05)"}
+                                  ? t("normalDistribution") 
+                                  : t("nonNormalDistribution")}
                               </TableCell>
                           </TableRow>
                         )) ?? (
                           <TableRow>
-                            <TableCell colSpan={4} className="text-center">Нет данных</TableCell>
+                            <TableCell colSpan={4} className="text-center">{t("noData")}</TableCell>
                           </TableRow>
                         )}
                       </TableBody>
@@ -1294,16 +1270,16 @@ export default function UploadPage() {
 
                     {/* Chi-Square Test Results */}
                     <div>
-                      <h3 className="text-lg font-semibold mb-4">Тест Хи-квадрат (Пирсона)</h3>
+                      <h3 className="text-lg font-semibold mb-4">{t("chiSquareTest")}</h3>
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Переменная</TableHead>
-                          <TableHead>Статистика</TableHead>
-                          <TableHead>P-значение</TableHead>
-                          <TableHead>Степени свободы</TableHead>
-                            <TableHead>Интервалы</TableHead>
-                          <TableHead>Вывод (alpha=0.05)</TableHead>
+                          <TableHead>{t("variable")}</TableHead>
+                          <TableHead>{t("statistic")}</TableHead>
+                          <TableHead>{t("pValue")}</TableHead>
+                          <TableHead>{t("degreesOfFreedom")}</TableHead>
+                            <TableHead>{t("intervals")}</TableHead>
+                          <TableHead>{t("conclusion")}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1316,13 +1292,13 @@ export default function UploadPage() {
                               <TableCell>{test.intervals}</TableCell>
                               <TableCell>
                                 {test.is_normal 
-                                  ? "Распределение нормальное (p > 0.05)" 
-                                  : "Распределение не нормальное (p ≤ 0.05)"}
+                                  ? t("normalDistribution") 
+                                  : t("nonNormalDistribution")}
                               </TableCell>
                             </TableRow>
                         )) ?? (
                           <TableRow>
-                              <TableCell colSpan={6} className="text-center">Нет данных</TableCell>
+                              <TableCell colSpan={6} className="text-center">{t("noData")}</TableCell>
                           </TableRow>
                         )}
                       </TableBody>
@@ -1332,7 +1308,7 @@ export default function UploadPage() {
                     {/* Гистограммы распределения с нормальной кривой */}
                     {analysisResult.descriptive_stats?.histograms && analysisResult.descriptive_stats.histograms.length > 0 && (
                       <div className="mt-8">
-                        <h3 className="text-lg font-semibold mb-4">Гистограммы распределения с наложенной нормальной кривой</h3>
+                        <h3 className="text-lg font-semibold mb-4">{t("histogramsWithNormalCurve")}</h3>
                         
 
                         
@@ -1355,7 +1331,7 @@ export default function UploadPage() {
                                   showNormalCurve={true} // Включаем отображение нормальной кривой на вкладке с тестами нормальности
                                 />
                               ) : (
-                                <p className="text-sm text-center text-gray-500">Нет данных для гистограммы '{hist.column_name}'</p>
+                                <p className="text-sm text-center text-gray-500">{`${t("noDataForHistogram")} '${hist.column_name}'`}</p>
                               )}
                             </div>
                           ))}
@@ -1371,7 +1347,7 @@ export default function UploadPage() {
               <TabsContent value="regression">
                 <Card className="w-full overflow-hidden">
                   <CardHeader>
-                    <CardTitle>Регрессионный Анализ</CardTitle>
+                    <CardTitle>{t("regressionAnalysis")}</CardTitle>
                   </CardHeader>
                   <CardContent className="p-0 md:p-1">
                     {(() => { // IIFE to ensure regressionAnalysis is defined in this scope
@@ -1448,7 +1424,7 @@ export default function UploadPage() {
                           {modelForDisplay && (
                             <div key={`regression-details-${modelForDisplay.regression_type}`} className="w-full border rounded-lg p-2 md:p-4 bg-white shadow-sm mt-1">
                               <div className="bg-blue-50 p-3 mb-4 rounded-md">
-                                <p className="font-medium text-blue-800">Уравнение регрессии ({regressionTypeTranslations[modelForDisplay.regression_type] || modelForDisplay.regression_type}):</p>
+                                <p className="font-medium text-blue-800">{t("regressionEquation")} ({regressionTypeTranslations[modelForDisplay.regression_type] || modelForDisplay.regression_type}):</p>
                                 <p className="mt-1 text-sm md:text-base break-all">
                                   {formatRegressionEquation(modelForDisplay, regressionAnalysis.dependent_variable, regressionAnalysis.independent_variables[0] || "x")}
                                 </p>
@@ -1465,7 +1441,7 @@ export default function UploadPage() {
                                                   dependentVar={regressionAnalysis.dependent_variable}
                                 independentVar={regressionAnalysis.independent_variables[0] || "x"}
                                                   globalYDomain={globalYDomain}
-                                                />
+                                />
                       </div>
                     )}
 
@@ -1477,49 +1453,53 @@ export default function UploadPage() {
                             shapiroTest={modelForDisplay.residuals_analysis.shapiro_test}
                             histogram={modelForDisplay.residuals_analysis.histogram}
                             qqPlot={modelForDisplay.residuals_analysis.qq_plot}
-                            title={`Анализ остатков регрессии (${regressionTypeTranslations[modelForDisplay.regression_type] || modelForDisplay.regression_type})`}
+                            title={`${t("residualsAnalysis")} (${regressionTypeTranslations[modelForDisplay.regression_type] || modelForDisplay.regression_type})`}
                           />
                       </div>
                     )}
 
-                    {/* Новая секция для деталей выбранной модели (modelForDisplay) */} 
+                    {/* Новая секция для деталей выбранной модели (modelForDisplay) */}
                     {modelForDisplay && (
                         <div key={`model-details-summary-${modelForDisplay.regression_type}`} className="mt-6 w-full border rounded-lg p-2 md:p-4 bg-white shadow-sm">
-                            <h3 className="text-lg font-semibold mb-3">Сводка по модели: {regressionTypeTranslations[modelForDisplay.regression_type] || modelForDisplay.regression_type}</h3>
+                            <h3 className="text-lg font-semibold mb-3">{t("modelSummary")}: {regressionTypeTranslations[modelForDisplay.regression_type] || modelForDisplay.regression_type}</h3>
                             <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead>Переменная</TableHead>
-                                        <TableHead>Коэффициент</TableHead>
-                                        {!(modelForDisplay.regression_type === "Trigonometric" || modelForDisplay.regression_type === "Sigmoid") && (
-                                            <>
-                                                <TableHead>Стд. ошибка</TableHead>
-                                                <TableHead>t-статистика</TableHead>
-                                                <TableHead>p-значение</TableHead>
-                                                <TableHead>Доверительный интервал</TableHead>
-                                            </>
-                                        )}
+                                        <TableHead>{t("parameter")}</TableHead>
+                                        <TableHead>{t("value")}</TableHead>
+                                        <TableHead>{t("stdError")}</TableHead>
+                                        <TableHead>{t("tStatistic")}</TableHead>
+                                        <TableHead>{t("pValue")}</TableHead>
+                                        <TableHead>{t("confidenceInterval")}</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {modelForDisplay.coefficients.map((coef, coefIndex) => (
                                         <TableRow key={`coef-${modelForDisplay.regression_type}-${coefIndex}-${coef.variable_name}`}>
-                                            <TableCell>{coef.variable_name === "const" ? t("intercept") : coef.variable_name}</TableCell>
+                                            <TableCell className="font-medium">
+                                                {modelForDisplay.regression_type === 'Linear'
+                                                    ? (coef.variable_name === 'const' ? 'b' : 'a')
+                                                    : (coef.variable_name === "const" ? t("intercept") : coef.variable_name)
+                                                }
+                                            </TableCell>
                                             <TableCell>{formatNumber(coef.coefficient)}</TableCell>
-                                            {!(modelForDisplay.regression_type === "Trigonometric" || modelForDisplay.regression_type === "Sigmoid") && (
-                                                <>
-                                                    <TableCell>{typeof coef.std_error === 'number' ? formatNumber(coef.std_error) : "N/A"}</TableCell>
-                                                    <TableCell>{typeof coef.t_statistic === 'number' ? formatNumber(coef.t_statistic) : "N/A"}</TableCell>
-                                                    <TableCell>{typeof coef.p_value === 'number' ? coef.p_value.toExponential(10) : "N/A"}</TableCell>
-                                                    <TableCell>
-                                                        {typeof coef.confidence_interval_lower === 'number' && typeof coef.confidence_interval_upper === 'number'
-                                                        ? `[${formatNumber(coef.confidence_interval_lower)}, ${formatNumber(coef.confidence_interval_upper)}]`
-                                                        : "N/A"}
-                                                    </TableCell>
-                                                </>
-                                            )}
+                                            <TableCell>{typeof coef.std_error === 'number' ? formatNumber(coef.std_error) : t("na")}</TableCell>
+                                            <TableCell>{typeof coef.t_statistic === 'number' ? formatNumber(coef.t_statistic) : t("na")}</TableCell>
+                                            <TableCell>{typeof coef.p_value === 'number' ? formatNumber(coef.p_value, 3, true) : t("na")}</TableCell>
+                                            <TableCell>
+                                                {typeof coef.confidence_interval_lower === 'number' && typeof coef.confidence_interval_upper === 'number'
+                                                ? `[${formatNumber(coef.confidence_interval_lower)}, ${formatNumber(coef.confidence_interval_upper)}]`
+                                                : t("na")}
+                                            </TableCell>
                                         </TableRow>
                                     ))}
+                                    <TableRow>
+                                        <TableCell className="font-medium">{t("fStatisticAndPValue")}</TableCell>
+                                        <TableCell>
+                                            {formatNumber(modelForDisplay.f_statistic)} (p: {formatNumber(modelForDisplay.prob_f_statistic, 3, true)})
+                                        </TableCell>
+                                        <TableCell colSpan={4} />
+                                    </TableRow>
                                 </TableBody>
                             </Table>
                       </div>
@@ -1528,15 +1508,15 @@ export default function UploadPage() {
                           {/* Таблица сравнения моделей */} 
                           {sortedModels.length > 0 && (
                           <div className="mt-6">
-                              <h3 className="text-lg font-semibold mb-2">Сравнение моделей регрессии</h3>
+                              <h3 className="text-lg font-semibold mb-2">{t("modelComparison")}</h3>
                      <Table>
                       <TableHeader>
                         <TableRow>
-                                  <TableHead>Тип модели</TableHead>
-                                    <TableHead className="text-right">R²</TableHead>
-                                    <TableHead className="text-right">Скорр. R²</TableHead>
-                                    <TableHead className="text-right">F-статистика</TableHead>
-                                    <TableHead className="text-right">SSE</TableHead>
+                                  <TableHead>{t("modelType")}</TableHead>
+                                    <TableHead className="text-right">{t("rSquared")}</TableHead>
+                                    <TableHead className="text-right">{t("adjustedRSquared")}</TableHead>
+                                    <TableHead className="text-right">{t("fStatistic")}</TableHead>
+                                    <TableHead className="text-right">{t("sse")}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1545,17 +1525,13 @@ export default function UploadPage() {
                                       <TableCell>{regressionTypeTranslations[model.regression_type] || model.regression_type}</TableCell>
                                       <TableCell className="text-right">{formatNumber(model.r_squared, 3)}</TableCell>
                                       <TableCell className="text-right">
-                                        {typeof model.adjusted_r_squared === 'number' ? formatNumber(model.adjusted_r_squared, 3) : "N/A"}
+                                        {typeof model.adjusted_r_squared === 'number' ? formatNumber(model.adjusted_r_squared, 3) : t("na")}
                                       </TableCell>
                                       <TableCell className="text-right">
-                                        {model.regression_type === "Trigonometric" || model.regression_type === "Sigmoid" 
-                                          ? "Не применимо" 
-                                          : (typeof model.f_statistic === 'number' 
-                                            ? `${formatNumber(model.f_statistic, 2)}` 
-                                            : "N/A")}
+                                        {typeof model.f_statistic === 'number' ? formatNumber(model.f_statistic, 2) : t("na")}
                                       </TableCell>
                                       <TableCell className="text-right">
-                                        {typeof model.sse === 'number' ? formatNumber(model.sse, 3) : "N/A"}
+                                        {typeof model.sse === 'number' ? formatNumber(model.sse, 3) : t("na")}
                                       </TableCell>
                           </TableRow>
                                   ))}
@@ -1579,25 +1555,6 @@ export default function UploadPage() {
                       <CardTitle>{t("wilcoxon_tests")}</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-6">
-                      {/* Информация о выбранных тестах */}
-                      <div className="mb-4 p-2 bg-blue-50 border border-blue-300 rounded-md">
-                        <h3 className="font-medium">Статус выполнения тестов Вилкоксона:</h3>
-                        <div className="grid grid-cols-2 gap-4 mt-2">
-                          <div>
-                            <p className="font-medium">Тест знаковых рангов Вилкоксона:</p>
-                            <p className="ml-2">{selectedAnalysesOptions.wilcoxon_signed_rank ? "✅ Выбран" : "❌ Не выбран"}</p>
-                          </div>
-                          <div>
-                            <p className="font-medium">Тест Манна-Уитни:</p>
-                            <p className="ml-2">{selectedAnalysesOptions.mann_whitney ? "✅ Выбран" : "❌ Не выбран"}</p>
-                          </div>
-                        </div>
-                        <p className="mt-2">
-                          {!analysisResult?.wilcoxon_tests ? 
-                            "⚠️ Результаты тестов отсутствуют. Возможно, тесты не применимы к выбранным данным или произошла ошибка." : 
-                            "✅ Результаты тестов получены и отображены ниже."}
-                        </p>
-                      </div>
                       {/* Wilcoxon Signed Rank Test Results - учет null в данных */}
                       {analysisResult?.wilcoxon_tests && (
                         (analysisResult.wilcoxon_tests?.signed_rank_results && 
@@ -1606,7 +1563,7 @@ export default function UploadPage() {
                          analysisResult.wilcoxon_tests?.signedRankResults.length > 0)
                       ) && (
                         <div>
-                          <h3 className="text-lg font-semibold mb-4">{t("wilcoxon_signed_rank_test")}</h3>
+                          <h3 className="text-lg font-semibold mb-4">{t("wilcoxonSignedRankTest")}</h3>
                           <Table>
                             <TableHeader>
                               <TableRow>
@@ -1614,7 +1571,7 @@ export default function UploadPage() {
                                 <TableHead>{t("variable2")}</TableHead>
                                 <TableHead>{t("sample_size")}</TableHead>
                                 <TableHead>{t("statistic")}</TableHead>
-                                <TableHead>{t("p_value")}</TableHead>
+                                <TableHead>{t("pValue")}</TableHead>
                                 <TableHead>{t("conclusion")}</TableHead>
                               </TableRow>
                             </TableHeader>
@@ -1657,17 +1614,17 @@ export default function UploadPage() {
                          analysisResult.wilcoxon_tests?.mannWhitneyResults.length > 0)
                       ) && (
                         <div>
-                          <h3 className="text-lg font-semibold mb-4">{t("mann_whitney_test")}</h3>
+                          <h3 className="text-lg font-semibold mb-4">{t("mannWhitneyTest")}</h3>
                           <Table>
                             <TableHeader>
                               <TableRow>
                                 <TableHead>{t("group_column")}</TableHead>
-                                <TableHead>{t("value_column")}</TableHead>
+                                <TableHead>{t("variableToCompare")}</TableHead>
                                 <TableHead>{t("group1")} / {t("group2")}</TableHead>
                                 <TableHead>{t("group_sizes")}</TableHead>
                                 <TableHead>{t("group_medians")}</TableHead>
                                 <TableHead>{t("statistic")}</TableHead>
-                                <TableHead>{t("p_value")}</TableHead>
+                                <TableHead>{t("pValue")}</TableHead>
                                 <TableHead>{t("conclusion")}</TableHead>
                               </TableRow>
                             </TableHeader>
@@ -1710,7 +1667,7 @@ export default function UploadPage() {
                         (!analysisResult.wilcoxon_tests?.mann_whitney_results || analysisResult.wilcoxon_tests.mann_whitney_results.length === 0) && 
                         (!analysisResult.wilcoxon_tests?.mannWhitneyResults || analysisResult.wilcoxon_tests.mannWhitneyResults.length === 0))) && (
                         <div className="text-center py-8">
-                          <p>{t("no_wilcoxon_tests_performed")}</p>
+                          <p>{t("noWilcoxonTestsPerformed")}</p>
                         </div>
                       )}
                     </CardContent>

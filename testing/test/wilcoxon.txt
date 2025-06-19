@@ -1,0 +1,24 @@
+Результаты платформы:
+Wilcox_Paired_NoDiff.csv:
+Тест знаковых рангов Вилкоксона
+Переменная 1	Переменная 2	sampleSize	Статистика	P-значение	Вывод
+Before	After	15	54.0000	0.7615	
+No significant difference (fail to reject H0 at alpha=0.05)
+
+
+Wilcox_Paired_Significant.csv:
+Тест знаковых рангов Вилкоксона
+Переменная 1	Переменная 2	sampleSize	Статистика	P-значение	Вывод
+Before	After	15	1.0000	0.0001	
+Significant difference (reject H0 at alpha=0.05)
+
+Результаты скрипта:
+Анализ файла: ../datasets/Wilcox_Paired_Significant.csv
+Статистика Вилкоксона: 1.0000
+p-value: 0.0001
+Результат: Статистически значимое различие между выборками.
+
+Анализ файла: ../datasets/Wilcox_Paired_NoDiff.csv
+Статистика Вилкоксона: 54.0000
+p-value: 0.7615
+Результат: Нет статистически значимого различия между выборками.
